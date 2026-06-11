@@ -6,7 +6,9 @@ import pytest
 
 from loop_engine import LoopDefinition, LoopState
 from loop_engine.adapters import (
+    LLMJSONDecodeError,
     OpenAICompatibleJSONClient,
+    PlanContractError,
     ValidatedLLMPlanner,
     parse_json_object,
 )
@@ -20,6 +22,19 @@ class StaticJSONClient:
     def complete_json(self, messages):
         self.messages.append(messages)
         return self.payload
+
+
+class SequenceClient:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.messages = []
+
+    def complete_json(self, messages):
+        self.messages.append(messages)
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 def _state() -> LoopState:
@@ -120,7 +135,7 @@ def test_validated_llm_planner_ignores_known_prompt_echo_fields() -> None:
     ],
 )
 def test_validated_llm_planner_rejects_unsafe_plan(payload, message) -> None:
-    with pytest.raises(ValueError, match=message):
+    with pytest.raises(PlanContractError, match=message):
         ValidatedLLMPlanner(StaticJSONClient(payload)).plan(_state())
 
 
@@ -201,3 +216,76 @@ def test_openai_compatible_client_uses_gateway_contract(monkeypatch) -> None:
     assert captured["payload"]["stream"] is False
     assert captured["timeout"] == 12
     assert result["actions"][0]["tool"] == "run_verification"
+
+
+def test_contract_repair_accepts_corrected_second_response() -> None:
+    client = SequenceClient(
+        [
+            {"actions": [{"tool": "shell", "arguments": {}}]},
+            {
+                "rationale": "corrected",
+                "actions": [
+                    {"tool": "read_text", "arguments": {"path": "target.py"}}
+                ],
+            },
+        ]
+    )
+
+    plan = ValidatedLLMPlanner(client).plan(_state())
+
+    assert plan.rationale == "corrected"
+    assert plan.actions[0].tool == "read_text"
+    assert len(client.messages) == 2
+    repair_request = json.loads(client.messages[1][1]["content"])
+    assert "unknown tool" in repair_request["validation_error"]
+    assert repair_request["limits"]["repair_attempts_remaining"] == 0
+
+
+def test_contract_repair_handles_malformed_json_error_with_bounded_source() -> None:
+    raw = "not-json-" + ("x" * 500)
+    client = SequenceClient(
+        [
+            LLMJSONDecodeError("LLM response is not valid JSON", raw_content=raw),
+            {"actions": [{"tool": "run_verification", "arguments": {}}]},
+        ]
+    )
+
+    plan = ValidatedLLMPlanner(client, max_repair_source_chars=40).plan(_state())
+
+    repair_request = json.loads(client.messages[1][1]["content"])
+    assert len(repair_request["untrusted_original_response"]) == 40
+    assert plan.actions[0].tool == "run_verification"
+
+
+def test_contract_repair_stops_after_one_failed_attempt() -> None:
+    client = SequenceClient(
+        [
+            {"actions": [{"tool": "shell", "arguments": {}}]},
+            {"actions": [{"tool": "shell", "arguments": {}}]},
+        ]
+    )
+
+    with pytest.raises(PlanContractError, match="after one bounded attempt"):
+        ValidatedLLMPlanner(client).plan(_state())
+
+    assert len(client.messages) == 2
+
+
+def test_contract_repair_can_be_disabled() -> None:
+    client = SequenceClient(
+        [{"actions": [{"tool": "shell", "arguments": {}}]}]
+    )
+
+    with pytest.raises(ValueError, match="unknown tool"):
+        ValidatedLLMPlanner(client, contract_repair_attempts=0).plan(_state())
+
+    assert len(client.messages) == 1
+
+
+def test_transport_error_is_not_contract_repaired() -> None:
+    client = SequenceClient([RuntimeError("gateway unavailable")])
+
+    with pytest.raises(RuntimeError, match="gateway unavailable"):
+        ValidatedLLMPlanner(client).plan(_state())
+
+    assert len(client.messages) == 1

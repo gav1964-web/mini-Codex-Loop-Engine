@@ -8,6 +8,12 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
+class LLMJSONDecodeError(ValueError):
+    def __init__(self, message: str, *, raw_content: str) -> None:
+        super().__init__(message)
+        self.raw_content = raw_content
+
+
 class OpenAICompatibleJSONClient:
     def __init__(
         self,
@@ -56,7 +62,10 @@ class OpenAICompatibleJSONClient:
             content = response_payload["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise ValueError("LLM gateway response has no assistant content") from exc
-        return parse_json_object(content)
+        try:
+            return parse_json_object(content)
+        except ValueError as exc:
+            raise LLMJSONDecodeError(str(exc), raw_content=content) from exc
 
 
 def parse_json_object(content: str) -> dict[str, Any]:

@@ -85,7 +85,10 @@ def test_invalid_llm_plan_fails_before_any_tool_execution(tmp_path) -> None:
     target = tmp_path / "target.py"
     target.write_text("value = 1\n", encoding="utf-8")
     client = SequenceJSONClient(
-        [{"actions": [{"tool": "shell", "arguments": {"command": "del target.py"}}]}]
+        [
+            {"actions": [{"tool": "shell", "arguments": {"command": "del target.py"}}]},
+            {"actions": [{"tool": "shell", "arguments": {"command": "del target.py"}}]},
+        ]
     )
     engine, definition = build_llm_repair_loop(
         workspace_root=tmp_path,
@@ -98,8 +101,60 @@ def test_invalid_llm_plan_fails_before_any_tool_execution(tmp_path) -> None:
 
     assert state.status == LoopStatus.FAILED
     assert state.action_count == 0
-    assert state.stop_reason.startswith("planner_error:ValueError:unknown tool")
+    assert state.stop_reason.startswith("planner_error:PlanContractError:")
     assert target.read_text(encoding="utf-8") == "value = 1\n"
+
+
+def test_llm_repair_contract_correction_executes_only_validated_actions(tmp_path) -> None:
+    target = tmp_path / "target.py"
+    target.write_text("value = 1\n", encoding="utf-8")
+    client = SequenceJSONClient(
+        [
+            {
+                "actions": [
+                    {
+                        "tool": "shell",
+                        "arguments": {"command": "unsafe"},
+                    }
+                ]
+            },
+            {
+                "rationale": "schema corrected",
+                "actions": [
+                    {
+                        "tool": "apply_patch",
+                        "arguments": {
+                            "path": "target.py",
+                            "old_text": "value = 1",
+                            "new_text": "value = 2",
+                        },
+                    },
+                    {"tool": "run_verification", "arguments": {}},
+                ],
+            },
+        ]
+    )
+    engine, definition = build_llm_repair_loop(
+        workspace_root=tmp_path,
+        goal="Set value to 2",
+        llm_client=client,
+        verification_command=[
+            sys.executable,
+            "-c",
+            "from target import value; raise SystemExit(0 if value == 2 else 1)",
+        ],
+    )
+
+    state = engine.run(definition)
+
+    assert state.status == LoopStatus.COMPLETED
+    assert state.iteration == 1
+    assert [result.action.tool for result in state.action_results] == [
+        "apply_patch",
+        "run_verification",
+    ]
+    assert len(client.messages) == 2
+    assert "value = 2" in target.read_text(encoding="utf-8")
 
 
 def test_llm_repair_cli_uses_gateway_adapter_without_persisting_secret(

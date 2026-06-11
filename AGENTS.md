@@ -26,6 +26,9 @@ This project is a universal loop engine, not a coding-agent implementation.
 - LLM output is an untrusted proposal and must pass deterministic schema validation.
 - LLM planners may choose actions but may not execute tools or decide completion.
 - Provider credentials must stay in environment variables and out of checkpoints.
+- Contract repair may retry malformed LLM structure at most once.
+- Contract repair must not execute tools, alter goals, or reinterpret verification.
+- Transport failures are not contract errors and must not trigger repair prompts.
 
 ## Testing
 

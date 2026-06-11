@@ -56,6 +56,12 @@ def main(argv: list[str] | None = None) -> int:
     llm_repair.add_argument("--max-iterations", type=int, default=4)
     llm_repair.add_argument("--max-actions", type=int, default=16)
     llm_repair.add_argument("--max-actions-per-plan", type=int, default=5)
+    llm_repair.add_argument(
+        "--contract-repair-attempts",
+        type=int,
+        choices=(0, 1),
+        default=1,
+    )
     llm_repair.add_argument("--timeout", type=float, default=60.0)
     llm_repair.add_argument("--max-output-bytes", type=int, default=64 * 1024)
     llm_repair.add_argument("--checkpoints", type=Path)
@@ -168,6 +174,12 @@ def main(argv: list[str] | None = None) -> int:
                 max_actions_per_plan=int(
                     metadata.get("max_actions_per_plan", args.max_actions_per_plan)
                 ),
+                contract_repair_attempts=int(
+                    metadata.get(
+                        "contract_repair_attempts",
+                        args.contract_repair_attempts,
+                    )
+                ),
                 timeout_seconds=float(metadata.get("subprocess_timeout_seconds", args.timeout)),
                 max_output_bytes=int(metadata.get("max_output_bytes", args.max_output_bytes)),
                 checkpoint_root=args.checkpoints,
@@ -201,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_iterations=args.max_iterations,
                 max_actions=args.max_actions,
                 max_actions_per_plan=args.max_actions_per_plan,
+                contract_repair_attempts=args.contract_repair_attempts,
                 timeout_seconds=args.timeout,
                 max_output_bytes=args.max_output_bytes,
                 checkpoint_root=args.checkpoints,

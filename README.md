@@ -71,6 +71,7 @@ python -m loop_engine llm-repair \
   --goal "Fix the failing test" \
   --gateway-url http://127.0.0.1:8000 \
   --model auto \
+  --contract-repair-attempts 1 \
   --checkpoints checkpoints \
   -- python -m pytest
 ```
@@ -78,6 +79,8 @@ python -m loop_engine llm-repair \
 The gateway must expose the OpenAI-compatible endpoint
 `/v1/chat/completions`. An optional key is read from `LLM_GATEWAY_API_KEY` by
 default; only the environment variable name is stored in checkpoints.
+Malformed JSON or a schema-invalid plan receives at most one bounded
+contract-repair attempt. Disable it with `--contract-repair-attempts 0`.
 
 Installed CLI:
 
@@ -124,6 +127,7 @@ state = engine.run(definition)
 - provider-neutral `JSONLLMClient` port;
 - OpenAI-compatible HTTP JSON adapter;
 - bounded LLM context builder and strict plan validator;
+- one-shot bounded plan contract repair;
 - LLM-planned inspect-edit-verify profile;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
@@ -133,9 +137,9 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.5.0` adds validated LLM planning through an external gateway while
+Version `0.6.0` adds one-shot repair of malformed LLM plan contracts while
 keeping tools, verification, budgets, state transitions, and completion under
 deterministic control. It still excludes unrestricted shell access, parallel
-workers, and automatic repair of malformed LLM contracts.
+workers, and semantic self-correction outside the normal verified loop.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

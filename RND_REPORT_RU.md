@@ -32,6 +32,7 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - HTTP adapter к OpenAI-compatible gateway проекта `5`;
 - bounded LLM context builder;
 - strict JSON plan validator;
+- одноразовый bounded contract-repair pass;
 - LLM repair profile и CLI-команда `llm-repair`;
 - function adapters для planner и verifier;
 - deterministic criteria judge;
@@ -73,17 +74,23 @@ mini-Codex 7, а извлекает из неё общую идею управл
 31. LLM inspect-edit-verify на deterministic fake client.
 32. UTF-8 JSON output в Windows-консоли.
 33. Живой repair через gateway проекта `5`.
+34. Исправление schema-invalid plan со второй LLM-попытки.
+35. Исправление malformed JSON с bounded original response.
+36. Блокировка повторно невалидного repair response.
+37. Отключение repair через configuration.
+38. Запрет repair для transport errors.
+39. End-to-end выполнение только валидированных actions после repair.
 
 ## Результаты проверок
 
-- `pytest`: 45 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 51 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
 - checkpoint: полный state и event log сохранены.
 - живой gateway smoke 11 июня 2026 года: `read_text -> apply_patch ->
   run_verification`, status `completed`, verification exit code `0`;
-- wheel `0.5.0` собран, установлен в чистое Python 3.13 окружение, внешний CLI
+- wheel `0.6.0` собран, установлен в чистое Python 3.13 окружение, внешний CLI
   успешно запущен вне дерева исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
 
@@ -112,7 +119,6 @@ strategy.
 ## Что сознательно не реализовано
 
 - прямые SDK конкретных LLM-провайдеров;
-- автоматический contract-repair malformed LLM response;
 - parallel actions;
 - multi-agent delegation;
 - Plugin Generator adapter;
@@ -128,13 +134,13 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.5.0` добавляет реальное LLM-планирование, сохраняя deterministic
-validation, filesystem bounds, budgets и verifier authority. Модель предлагает
-plan, но не управляет state machine и не получает прямого доступа к tools.
+Версия `0.6.0` добавляет одноразовое исправление JSON/schema контракта. Repair
+не является новой loop iteration, не расходует action budget и не исполняет
+tools. После второй неудачи run завершается deterministic planner error.
 
-Следующая существенная гипотеза — contract-repair pass: malformed JSON или
-нарушение схемы должно давать модели одну ограниченную попытку исправить только
-структуру plan, не выполняя никаких actions.
+Следующая существенная гипотеза — advisory critic: отдельная LLM-оценка качества
+plan или verification evidence без права завершать run и без обхода
+deterministic judge.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

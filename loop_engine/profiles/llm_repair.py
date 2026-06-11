@@ -55,6 +55,7 @@ def build_llm_repair_loop(
     max_iterations: int = 4,
     max_actions: int = 16,
     max_actions_per_plan: int = 5,
+    contract_repair_attempts: int = 1,
     timeout_seconds: float = 60.0,
     max_output_bytes: int = 64 * 1024,
     checkpoint_root: str | Path | None = None,
@@ -81,6 +82,7 @@ def build_llm_repair_loop(
         planner=ValidatedLLMPlanner(
             llm_client,
             max_actions_per_plan=max_actions_per_plan,
+            contract_repair_attempts=contract_repair_attempts,
         ),
         executor=executor,
         verifier=FunctionVerifier(verify_repair_results),
@@ -109,6 +111,7 @@ def build_llm_repair_loop(
             "max_iterations": max_iterations,
             "max_actions": max_actions,
             "max_actions_per_plan": max_actions_per_plan,
+            "contract_repair_attempts": contract_repair_attempts,
             "subprocess_timeout_seconds": timeout_seconds,
             "max_output_bytes": max_output_bytes,
             "llm": dict(llm_metadata or {}),

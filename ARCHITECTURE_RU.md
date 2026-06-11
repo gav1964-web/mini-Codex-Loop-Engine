@@ -258,6 +258,46 @@ read_text -> apply_patch -> run_verification -> completed
 
 Весь запуск находился под внешним process-tree supervisor.
 
+## Contract Repair
+
+Ошибка JSON parsing или deterministic plan validation не приводит к немедленному
+запуску tools. `ValidatedLLMPlanner` может выполнить ровно одну дополнительную
+LLM-попытку:
+
+```text
+invalid response
+  -> bounded original response + validation error
+  -> contract-only repair prompt
+  -> full deterministic validation
+  -> valid Plan или terminal planner error
+```
+
+Repair prompt:
+
+- объявляет исходный ответ недоверенными данными;
+- передаёт не более 12 000 символов исходного ответа;
+- передаёт validation error с отдельным лимитом;
+- требует только `rationale`, `actions`, `expected_evidence`;
+- сообщает, что дополнительных repair attempts не осталось.
+
+До успешной повторной валидации actions не выполняются. Если второй ответ снова
+нарушает schema, run завершается с `PlanContractError`.
+
+Contract repair не может:
+
+- изменить goal или budgets;
+- выполнить tool;
+- исправить код;
+- интерпретировать verification;
+- дать модели completion authority.
+
+HTTP, timeout и другие transport errors не считаются ошибками контракта и не
+запускают повторный prompt. CLI позволяет отключить repair:
+
+```text
+--contract-repair-attempts 0
+```
+
 ## Отличие от mini-Codex 7
 
 В `7` agent loop был частью dialog runtime и знал о coding workflow. В `8`:
@@ -287,8 +327,8 @@ Loop Engine
 
 1. Process registry с owner/run id и heartbeat поверх существующего supervisor.
 2. Общий idempotency contract для side-effecting actions.
-3. Contract-repair pass для malformed LLM JSON.
-4. Отдельный LLM critic/judge advisory port без completion authority.
-5. Plugin Generator как динамический source новых tools.
-6. Human approval gate для рискованных mutations.
-7. Replay и сравнение loop strategies на одном event log.
+3. Отдельный LLM critic/judge advisory port без completion authority.
+4. Plugin Generator как динамический source новых tools.
+5. Human approval gate для рискованных mutations.
+6. Replay и сравнение loop strategies на одном event log.
+7. Метрики LLM calls, contract failures и repair success rate.
