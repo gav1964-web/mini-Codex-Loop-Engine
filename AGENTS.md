@@ -37,6 +37,10 @@ This project is a universal loop engine, not a coding-agent implementation.
   validation before the scheduler mutates a graph.
 - An LLM-declared atomic leaf must have observable success criteria and explicit
   required capabilities.
+- Coding leaf workspace, verification commands, gateway configuration, and
+  credentials must come from external policy, never from task metadata.
+- Do not mark read-only coding leaves complete until a dedicated evidence
+  verifier can evaluate their success criteria.
 - Parent completion requires completed children and an integration verifier result.
 - Plugin generation belongs behind `CapabilityAcquirer`, not inside the scheduler.
 

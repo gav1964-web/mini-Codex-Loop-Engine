@@ -22,6 +22,7 @@ from .llm_decomposer import (
     DecompositionContractError,
     ValidatedLLMTaskDecomposer,
 )
+from .coding_leaf import CodingLeafExecutor, CodingLeafPolicy
 from .demo import build_task_demo
 from .persistence import JsonTaskGraphStore
 from .scheduler import TaskScheduler
@@ -31,6 +32,8 @@ __all__ = [
     "AtomicityDecision",
     "CapabilityResolution",
     "ChildTaskSpec",
+    "CodingLeafExecutor",
+    "CodingLeafPolicy",
     "DecompositionContractError",
     "FunctionIntegrationVerifier",
     "FunctionLeafExecutor",

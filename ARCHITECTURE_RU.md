@@ -436,6 +436,38 @@ Plugin Generator должен реализовать `CapabilityAcquirer`. Sched
 - verifier evidence;
 - stop reason.
 
+### Coding Leaf Policy
+
+В `0.9.0` добавлен `CodingLeafExecutor`. Он переводит validated atomic contract
+в один из существующих profiles:
+
+```text
+process.verify
+  -> deterministic coding check
+
+filesystem.patch + process.verify
+  -> validated LLM repair loop
+```
+
+Read/list/search capabilities могут сопровождать repair leaf. Наличие
+`filesystem.patch` без `process.verify` блокируется: изменение кода не считается
+завершённым без объективной проверки.
+
+Execution authority находится во внешнем `CodingLeafPolicy`:
+
+- workspace root;
+- immutable verification command;
+- subprocess timeout и output limit;
+- LLM iteration/action budgets;
+- checkpoint root.
+
+Task metadata не может переопределить workspace, command, gateway, model или
+credentials. Reserved execution fields приводят к structured `blocked`.
+
+Read-only evidence leaf пока тоже блокируется. Успешный вызов `read_text` сам
+по себе не доказывает, что критерий диагностики выполнен. Для такого leaf нужен
+отдельный evidence verifier, который проверит достаточность собранных фактов.
+
 ### Recovery
 
 Task graph имеет versioned JSON envelope. Узел, сохранённый как `running`,
@@ -473,7 +505,7 @@ Loop Engine
 
 ## Следующий этап
 
-1. Coding-oriented leaf factory по validated metadata узла.
+1. Read-only evidence profile и verifier для диагностических leaves.
 2. Реальный Plugin Generator adapter для `CapabilityAcquirer`.
 3. Parent integration verification через bounded commands.
 4. Process registry с owner/run id и heartbeat.

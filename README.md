@@ -145,6 +145,8 @@ state = engine.run(definition)
 - typed atomic leaf contracts for goal, criteria, capabilities, and metadata;
 - capability resolver and acquisition port for Plugin Generator integration;
 - `LoopEngine`-backed atomic leaf executor;
+- coding leaf executor for bounded LLM repair and deterministic verification;
+- external immutable workspace and verification policy for coding leaves;
 - parent integration verification and status propagation;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
@@ -154,11 +156,11 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.8.0` adds validated LLM decomposition above the persistent Atomic
-Task Runtime. The model may propose immediate children and dependencies or a
-typed atomic leaf contract. Deterministic validation rejects unknown fields,
-invalid keys and capabilities, cycles, oversized payloads, and incomplete
-atomic leaves before the scheduler mutates the graph. The real Plugin Generator
-adapter and coding-oriented leaf factory remain future layers.
+Version `0.9.0` connects validated atomic coding contracts to real loop
+profiles. A leaf requiring `filesystem.patch` plus `process.verify` runs through
+the bounded LLM repair loop; a leaf requiring only `process.verify` runs the
+immutable deterministic coding check. Workspace, commands, gateway settings,
+and credentials cannot be supplied by LLM metadata. Read-only evidence leaves
+remain explicitly blocked until they have a dedicated evidence verifier.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.
