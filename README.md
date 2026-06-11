@@ -42,6 +42,27 @@ python -m loop_engine demo --checkpoints checkpoints --resume RUN_ID
 python -m loop_engine check --checkpoints checkpoints --resume RUN_ID
 ```
 
+Run a bounded scripted repair:
+
+```json
+{
+  "path": "src/example.py",
+  "old_text": "return 1",
+  "new_text": "return 2",
+  "expected_replacements": 1
+}
+```
+
+```bash
+python -m loop_engine repair \
+  --workspace . \
+  --patch-file patch.json \
+  -- python -m pytest
+```
+
+The patch file may also contain an array of repair attempts. A failed
+verification triggers the next patch through the normal replan transition.
+
 Installed CLI:
 
 ```bash
@@ -81,6 +102,9 @@ state = engine.run(definition)
 - verification-only coding loop profile;
 - versioned JSON checkpoints;
 - phase-aware recovery without repeating checkpointed actions;
+- bounded `list_files`, `read_text`, and `search_text` tools;
+- atomic exact-text `apply_patch` with optional SHA-256 precondition;
+- deterministic inspect-edit-verify repair profile;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
 
@@ -89,10 +113,9 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.3.0` is a deterministic MVP with bounded subprocess execution,
-phase-aware checkpoint recovery, and a first coding verification profile. It
-deliberately excludes LLM provider code, filesystem editing, autonomous repair,
-and distributed workers until their contracts can be added without weakening
-the loop kernel.
+Version `0.4.0` is a deterministic MVP with bounded subprocess execution,
+phase-aware checkpoint recovery, bounded filesystem editing, and a scripted
+repair profile. It deliberately excludes LLM provider code, autonomous patch
+generation, arbitrary shell access, and distributed workers.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

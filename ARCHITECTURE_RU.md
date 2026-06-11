@@ -143,6 +143,52 @@ code, judge завершает цикл только при `exit_code == 0`.
 coding goal -> bounded command -> process evidence -> verifier -> judge
 ```
 
+## Bounded Filesystem
+
+`BoundedFilesystem` регистрирует четыре capability:
+
+- `list_files`;
+- `read_text`;
+- `search_text`;
+- `apply_patch`.
+
+Все пути разрешаются относительно одного workspace root. Выход через `..`,
+абсолютный внешний путь или symlink запрещён. `.git`, bytecode, pytest cache и
+реальные `.env*` не участвуют в обходе и недоступны для прямого чтения или
+изменения. `.env.example` остаётся доступным как безопасный шаблон.
+
+Чтение, число результатов и размер изменяемого файла ограничены. `apply_patch`
+не принимает произвольный shell или unified diff. Он выполняет exact-text
+замену в одном существующем UTF-8 файле:
+
+```json
+{
+  "path": "src/example.py",
+  "old_text": "return 1",
+  "new_text": "return 2",
+  "expected_replacements": 1,
+  "expected_sha256": "optional precondition"
+}
+```
+
+Запись атомарна через временный файл и `os.replace`. Если `old_text` уже
+отсутствует, а `new_text` присутствует, tool возвращает `already_applied`.
+Это делает повтор после сбоя между side effect и checkpoint безопасным для
+данного типа patch.
+
+## Scripted Repair Profile
+
+Первый полный coding loop имеет форму:
+
+```text
+inspect -> read/search -> apply_patch -> supervised verification
+        -> complete / replan with next patch / stop
+```
+
+Planner пока deterministic и получает заранее заданную последовательность
+patches. Это проверяет orchestration, safety, recovery и verification до
+подключения LLM. Генерация patch по описанию задачи ещё не реализована.
+
 ## Отличие от mini-Codex 7
 
 В `7` agent loop был частью dialog runtime и знал о coding workflow. В `8`:
@@ -171,9 +217,9 @@ Loop Engine
 ## Следующий этап
 
 1. Process registry с owner/run id и heartbeat поверх существующего supervisor.
-2. Idempotency contract для side-effecting actions.
-3. Bounded filesystem inspect/edit tools.
-4. JSON-contract LLM planner/judge adapters.
+2. Общий idempotency contract для side-effecting actions.
+3. JSON-contract LLM planner/judge adapters.
+4. LLM-generated patch proposal с deterministic schema validation.
 5. Plugin Generator как динамический source новых tools.
-6. Coding loop profile: inspect/edit/test/repair.
+6. Human approval gate для рискованных mutations.
 7. Replay и сравнение loop strategies на одном event log.

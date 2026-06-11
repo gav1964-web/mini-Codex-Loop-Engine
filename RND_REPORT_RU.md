@@ -23,6 +23,11 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - versioned checkpoint envelope;
 - десериализация полного `LoopState`;
 - phase-aware recovery через CLI и API;
+- bounded filesystem adapter;
+- `list_files`, `read_text`, `search_text`;
+- атомарный и идемпотентный exact-text `apply_patch`;
+- scripted inspect-edit-verify repair profile;
+- CLI-команда `repair`;
 - function adapters для planner и verifier;
 - deterministic criteria judge;
 - JSON CLI;
@@ -45,15 +50,25 @@ mini-Codex 7, а извлекает из неё общую идею управл
 13. Безопасная загрузка legacy checkpoint.
 14. Защита `run_id` от path traversal.
 15. CLI resume из сохранённого checkpoint.
+16. Запрет filesystem path traversal и symlink traversal.
+17. Ограничение чтения и размера patch target.
+18. SHA-256 precondition перед изменением.
+19. Идемпотентный повтор patch после незаписанного side effect.
+20. Одноитерационный inspect-edit-verify repair.
+21. Replan на вторую patch-попытку после провала verification.
+22. Repair CLI с JSON patch-файлом.
+23. Запрет чтения и изменения `.git` и реальных `.env*`.
+24. Разрешение `.env.example` как шаблона.
+25. Запрет прямого и вложенного symlink path.
 
 ## Результаты проверок
 
-- `pytest`: 16 passed;
+- `pytest`: 30 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
 - checkpoint: полный state и event log сохранены.
-- wheel `0.3.0` собран, установлен в отдельный Python 3.13 venv и CLI успешно
+- wheel `0.4.0` собран, установлен в отдельный Python 3.13 venv и CLI успешно
   запущен вне дерева исходников.
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
 
@@ -82,7 +97,6 @@ strategy.
 ## Что сознательно не реализовано
 
 - LLM API;
-- filesystem editor;
 - parallel actions;
 - multi-agent delegation;
 - Plugin Generator adapter;
@@ -98,10 +112,10 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.3.0` закрывает базовый execution и recovery layer. Следующая
-существенная гипотеза — добавить bounded filesystem tools и planner, способный
-строить цикл `inspect -> edit -> verify -> repair`, не получая прямого контроля
-над переходами state machine.
+Версия `0.4.0` закрывает базовый execution, recovery и bounded repair layer.
+Следующая существенная гипотеза — заменить scripted patch source на
+JSON-contract LLM planner, сохранив deterministic validation, filesystem bounds
+и verifier authority.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
