@@ -189,6 +189,75 @@ Planner пока deterministic и получает заранее заданну
 patches. Это проверяет orchestration, safety, recovery и verification до
 подключения LLM. Генерация patch по описанию задачи ещё не реализована.
 
+## LLM Planning Layer
+
+LLM подключается через provider-neutral порт:
+
+```text
+JSONLLMClient.complete_json(messages) -> JSON object
+```
+
+Текущий HTTP adapter совместим с gateway проекта `5`:
+
+```text
+POST http://127.0.0.1:8000/v1/chat/completions
+```
+
+Kernel не импортирует код gateway и не знает о провайдерах. URL, model и имя
+переменной окружения с API key относятся к adapter metadata. Сам секрет в
+checkpoint не записывается.
+
+`ValidatedLLMPlanner` получает bounded context:
+
+- цель и success criteria;
+- iteration и оставшийся action budget;
+- последнее verification;
+- до восьми последних tool results с отдельным лимитом размера.
+
+Ответ LLM считается недоверенным proposal. До executor он проходит
+deterministic validation:
+
+- только известные tool names;
+- только разрешённые arguments;
+- только workspace-relative paths;
+- положительные числовые limits;
+- непустой `old_text` для patch;
+- максимальное число actions;
+- ограничение строковых полей.
+
+Известные prompt echo-поля `capabilities` и `rules` отбрасываются. Другие
+неизвестные поля блокируют plan. Поддерживается ограниченная оболочка
+`{"response": {...}}`, которую некоторые модели возвращали по раннему
+варианту контракта.
+
+LLM не может:
+
+- выполнить tool напрямую;
+- заменить verification command;
+- объявить задачу завершённой;
+- увеличить budgets;
+- выйти за workspace.
+
+## LLM Repair Profile
+
+```text
+goal -> LLM plan -> schema validator -> bounded tools
+     -> deterministic verifier -> deterministic judge
+     -> complete / replan / stop
+```
+
+Инспекция, patch и verification могут занимать разные итерации. Если
+`run_verification` ещё не выполнялся, verifier возвращает `incomplete`, а judge
+разрешает replan только в пределах iteration/action/wall-clock budgets.
+
+Живой smoke 11 июня 2026 года через модель `auto` gateway проекта `5` прошёл:
+
+```text
+read_text -> apply_patch -> run_verification -> completed
+```
+
+Весь запуск находился под внешним process-tree supervisor.
+
 ## Отличие от mini-Codex 7
 
 В `7` agent loop был частью dialog runtime и знал о coding workflow. В `8`:
@@ -218,8 +287,8 @@ Loop Engine
 
 1. Process registry с owner/run id и heartbeat поверх существующего supervisor.
 2. Общий idempotency contract для side-effecting actions.
-3. JSON-contract LLM planner/judge adapters.
-4. LLM-generated patch proposal с deterministic schema validation.
+3. Contract-repair pass для malformed LLM JSON.
+4. Отдельный LLM critic/judge advisory port без completion authority.
 5. Plugin Generator как динамический source новых tools.
 6. Human approval gate для рискованных mutations.
 7. Replay и сравнение loop strategies на одном event log.

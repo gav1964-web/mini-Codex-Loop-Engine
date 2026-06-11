@@ -49,6 +49,44 @@ class ScriptedRepairJudge:
         )
 
 
+def verify_repair_results(
+    state: LoopState,
+    results: list,
+) -> VerificationResult:
+    errors = [
+        f"{result.action.tool}: {result.error}"
+        for result in results
+        if result.status != "ok"
+    ]
+    if errors:
+        return VerificationResult(status="blocked", failed=errors)
+    process_results = [
+        result.output for result in results if result.action.tool == "run_verification"
+    ]
+    if not process_results:
+        return VerificationResult(
+            status="incomplete",
+            failed=["verification has not been run yet"],
+            evidence={
+                "completed_tools": [result.action.tool for result in results],
+            },
+        )
+    process = process_results[-1]
+    if process.get("timed_out"):
+        return VerificationResult(
+            status="blocked",
+            failed=["verification command timed out"],
+            evidence=process,
+        )
+    exit_code = process.get("exit_code")
+    return VerificationResult(
+        status="passed" if exit_code == 0 else "failed",
+        passed=["repair verification exited with code 0"] if exit_code == 0 else [],
+        failed=[] if exit_code == 0 else [f"repair verification exited with code {exit_code}"],
+        evidence=process,
+    )
+
+
 def build_scripted_repair_loop(
     *,
     workspace_root: str | Path,
@@ -119,39 +157,11 @@ def build_scripted_repair_loop(
             expected_evidence=["target file evidence", "patch result", "verification exit code"],
         )
 
-    def verify(state: LoopState, results) -> VerificationResult:
-        errors = [
-            f"{result.action.tool}: {result.error}"
-            for result in results
-            if result.status != "ok"
-        ]
-        if errors:
-            return VerificationResult(status="blocked", failed=errors)
-        process_results = [
-            result.output for result in results if result.action.tool == "run_verification"
-        ]
-        if not process_results:
-            return VerificationResult(status="blocked", failed=["verification result is missing"])
-        process = process_results[-1]
-        if process.get("timed_out"):
-            return VerificationResult(
-                status="blocked",
-                failed=["verification command timed out"],
-                evidence=process,
-            )
-        exit_code = process.get("exit_code")
-        return VerificationResult(
-            status="passed" if exit_code == 0 else "failed",
-            passed=["repair verification exited with code 0"] if exit_code == 0 else [],
-            failed=[] if exit_code == 0 else [f"repair verification exited with code {exit_code}"],
-            evidence=process,
-        )
-
     store = JsonCheckpointStore(checkpoint_root) if checkpoint_root else None
     engine = LoopEngine(
         planner=FunctionPlanner(plan),
         executor=executor,
-        verifier=FunctionVerifier(verify),
+        verifier=FunctionVerifier(verify_repair_results),
         judge=ScriptedRepairJudge(),
         checkpoint_store=store,
     )

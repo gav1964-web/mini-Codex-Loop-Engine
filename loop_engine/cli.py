@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
+from .adapters import OpenAICompatibleJSONClient
 from .checkpoint import JsonCheckpointStore
 from .demo import build_counter_demo
-from .profiles import build_coding_check_loop, build_scripted_repair_loop
+from .profiles import (
+    build_coding_check_loop,
+    build_llm_repair_loop,
+    build_scripted_repair_loop,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="mini-codex-loop")
     subparsers = parser.add_subparsers(dest="command", required=True)
     demo = subparsers.add_parser("demo", help="Run the deterministic counter loop.")
@@ -34,6 +42,25 @@ def main(argv: list[str] | None = None) -> int:
     repair.add_argument("--checkpoints", type=Path)
     repair.add_argument("--resume", metavar="RUN_ID")
     repair.add_argument("process_command", nargs=argparse.REMAINDER)
+    llm_repair = subparsers.add_parser(
+        "llm-repair",
+        help="Run an LLM-planned repair through bounded capabilities.",
+    )
+    llm_repair.add_argument("--workspace", type=Path, default=Path.cwd())
+    llm_repair.add_argument("--goal")
+    llm_repair.add_argument("--gateway-url", default="http://127.0.0.1:8000")
+    llm_repair.add_argument("--model", default="auto")
+    llm_repair.add_argument("--llm-timeout", type=float, default=120.0)
+    llm_repair.add_argument("--llm-max-tokens", type=int, default=2048)
+    llm_repair.add_argument("--api-key-env", default="LLM_GATEWAY_API_KEY")
+    llm_repair.add_argument("--max-iterations", type=int, default=4)
+    llm_repair.add_argument("--max-actions", type=int, default=16)
+    llm_repair.add_argument("--max-actions-per-plan", type=int, default=5)
+    llm_repair.add_argument("--timeout", type=float, default=60.0)
+    llm_repair.add_argument("--max-output-bytes", type=int, default=64 * 1024)
+    llm_repair.add_argument("--checkpoints", type=Path)
+    llm_repair.add_argument("--resume", metavar="RUN_ID")
+    llm_repair.add_argument("process_command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
 
     if args.command == "demo":
@@ -73,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
                 checkpoint_root=args.checkpoints,
             )
             state = engine.run(definition)
-    else:
+    elif args.command == "repair":
         process_command = list(args.process_command)
         if process_command and process_command[0] == "--":
             process_command.pop(0)
@@ -109,6 +136,75 @@ def main(argv: list[str] | None = None) -> int:
                 timeout_seconds=args.timeout,
                 max_output_bytes=args.max_output_bytes,
                 checkpoint_root=args.checkpoints,
+            )
+            state = engine.run(definition)
+    else:
+        process_command = list(args.process_command)
+        if process_command and process_command[0] == "--":
+            process_command.pop(0)
+        if args.resume:
+            if not args.checkpoints:
+                parser.error("--resume requires --checkpoints")
+            loaded = JsonCheckpointStore(args.checkpoints).load(args.resume)
+            metadata = loaded.definition.metadata
+            if metadata.get("profile") != "llm_repair":
+                parser.error("checkpoint does not contain an LLM repair profile")
+            llm_metadata = dict(metadata.get("llm", {}))
+            api_key_env = str(llm_metadata.get("api_key_env", args.api_key_env))
+            client = OpenAICompatibleJSONClient(
+                base_url=str(llm_metadata.get("gateway_url", args.gateway_url)),
+                model=str(llm_metadata.get("model", args.model)),
+                timeout_seconds=float(llm_metadata.get("timeout_seconds", args.llm_timeout)),
+                max_tokens=int(llm_metadata.get("max_tokens", args.llm_max_tokens)),
+                api_key=os.getenv(api_key_env),
+            )
+            engine, _ = build_llm_repair_loop(
+                workspace_root=metadata["workspace_root"],
+                goal=str(metadata["goal"]),
+                llm_client=client,
+                verification_command=list(metadata["command"]),
+                max_iterations=int(metadata.get("max_iterations", args.max_iterations)),
+                max_actions=int(metadata.get("max_actions", args.max_actions)),
+                max_actions_per_plan=int(
+                    metadata.get("max_actions_per_plan", args.max_actions_per_plan)
+                ),
+                timeout_seconds=float(metadata.get("subprocess_timeout_seconds", args.timeout)),
+                max_output_bytes=int(metadata.get("max_output_bytes", args.max_output_bytes)),
+                checkpoint_root=args.checkpoints,
+                llm_metadata=llm_metadata,
+            )
+            state = engine.resume(loaded)
+        else:
+            if not args.goal:
+                parser.error("llm-repair requires --goal")
+            if not process_command:
+                parser.error("llm-repair requires a verification command after --")
+            llm_metadata = {
+                "gateway_url": args.gateway_url,
+                "model": args.model,
+                "timeout_seconds": args.llm_timeout,
+                "max_tokens": args.llm_max_tokens,
+                "api_key_env": args.api_key_env,
+            }
+            client = OpenAICompatibleJSONClient(
+                base_url=args.gateway_url,
+                model=args.model,
+                timeout_seconds=args.llm_timeout,
+                max_tokens=args.llm_max_tokens,
+                api_key=os.getenv(args.api_key_env),
+            )
+            engine, definition = build_llm_repair_loop(
+                workspace_root=args.workspace,
+                goal=args.goal,
+                llm_client=client,
+                verification_command=process_command,
+                max_iterations=args.max_iterations,
+                max_actions=args.max_actions,
+                max_actions_per_plan=args.max_actions_per_plan,
+                timeout_seconds=args.timeout,
+                max_output_bytes=args.max_output_bytes,
+                checkpoint_root=args.checkpoints,
+                llm_metadata=llm_metadata,
             )
             state = engine.run(definition)
     json.dump(state.to_dict(), sys.stdout, ensure_ascii=False, indent=2, default=str)

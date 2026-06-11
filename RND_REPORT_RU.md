@@ -28,6 +28,11 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - атомарный и идемпотентный exact-text `apply_patch`;
 - scripted inspect-edit-verify repair profile;
 - CLI-команда `repair`;
+- provider-neutral `JSONLLMClient`;
+- HTTP adapter к OpenAI-compatible gateway проекта `5`;
+- bounded LLM context builder;
+- strict JSON plan validator;
+- LLM repair profile и CLI-команда `llm-repair`;
 - function adapters для planner и verifier;
 - deterministic criteria judge;
 - JSON CLI;
@@ -60,16 +65,26 @@ mini-Codex 7, а извлекает из неё общую идею управл
 23. Запрет чтения и изменения `.git` и реальных `.env*`.
 24. Разрешение `.env.example` как шаблона.
 25. Запрет прямого и вложенного symlink path.
+26. Отклонение неизвестного LLM tool до выполнения actions.
+27. Отклонение traversal paths и лишних runtime arguments.
+28. Ограничение LLM context и action count.
+29. HTTP request contract `/v1/chat/completions`.
+30. Отсутствие API key в state и checkpoint.
+31. LLM inspect-edit-verify на deterministic fake client.
+32. UTF-8 JSON output в Windows-консоли.
+33. Живой repair через gateway проекта `5`.
 
 ## Результаты проверок
 
-- `pytest`: 30 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 45 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
 - checkpoint: полный state и event log сохранены.
-- wheel `0.4.0` собран, установлен в отдельный Python 3.13 venv и CLI успешно
-  запущен вне дерева исходников.
+- живой gateway smoke 11 июня 2026 года: `read_text -> apply_patch ->
+  run_verification`, status `completed`, verification exit code `0`;
+- wheel `0.5.0` собран, установлен в чистое Python 3.13 окружение, внешний CLI
+  успешно запущен вне дерева исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
 
 ## Принципиальные решения
@@ -96,7 +111,8 @@ strategy.
 
 ## Что сознательно не реализовано
 
-- LLM API;
+- прямые SDK конкретных LLM-провайдеров;
+- автоматический contract-repair malformed LLM response;
 - parallel actions;
 - multi-agent delegation;
 - Plugin Generator adapter;
@@ -112,10 +128,13 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.4.0` закрывает базовый execution, recovery и bounded repair layer.
-Следующая существенная гипотеза — заменить scripted patch source на
-JSON-contract LLM planner, сохранив deterministic validation, filesystem bounds
-и verifier authority.
+Версия `0.5.0` добавляет реальное LLM-планирование, сохраняя deterministic
+validation, filesystem bounds, budgets и verifier authority. Модель предлагает
+plan, но не управляет state machine и не получает прямого доступа к tools.
+
+Следующая существенная гипотеза — contract-repair pass: malformed JSON или
+нарушение схемы должно давать модели одну ограниченную попытку исправить только
+структуру plan, не выполняя никаких actions.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

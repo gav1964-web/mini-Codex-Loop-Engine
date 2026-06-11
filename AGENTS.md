@@ -23,6 +23,9 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Filesystem tools must resolve every path inside one explicit workspace root.
 - File mutations must be bounded, atomic, and idempotent under recovery.
 - Do not add unrestricted shell commands or arbitrary filesystem writes.
+- LLM output is an untrusted proposal and must pass deterministic schema validation.
+- LLM planners may choose actions but may not execute tools or decide completion.
+- Provider credentials must stay in environment variables and out of checkpoints.
 
 ## Testing
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from .models import Action, ActionResult, Judgement, LoopState, Plan, VerificationResult
 
@@ -29,4 +29,9 @@ class Judge(Protocol):
 
 class CheckpointStore(Protocol):
     def save(self, state: LoopState) -> None:
+        ...
+
+
+class JSONLLMClient(Protocol):
+    def complete_json(self, messages: list[dict[str, str]]) -> dict[str, Any]:
         ...
