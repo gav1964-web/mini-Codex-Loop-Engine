@@ -354,9 +354,33 @@ blocked  - dependency, capability или budget не позволяет прод
 может передать его одному bounded executor с локальными criteria и доступными
 capabilities. Неатомарный узел обязан вернуть непустой набор детей.
 
-В `0.7.0` используется `ScriptedTaskDecomposer`: decomposition задаётся
-deterministic fixture. Это позволяет сначала проверить scheduler semantics,
-не смешивая их с качеством LLM.
+`ScriptedTaskDecomposer` оставлен для deterministic fixtures и replay.
+
+В `0.8.0` добавлен `ValidatedLLMTaskDecomposer`. Модель может вернуть только
+один из двух вариантов:
+
+```text
+atomic   -> typed leaf contract
+decompose -> immediate children + local dependencies
+```
+
+Atomic leaf contract содержит уточнённые `goal`, `success_criteria`,
+`required_capabilities` и bounded `metadata`. Он применяется scheduler-ом
+только после полной deterministic validation.
+
+LLM proposal проверяется до изменения graph:
+
+- строгий набор полей для выбранного decision;
+- непустые criteria и capabilities атомарного листа;
+- bounded строки, массивы, metadata и число детей;
+- стабильный формат child keys и capability names;
+- уникальность keys и capabilities;
+- существование dependency references;
+- отсутствие self-dependency и циклов.
+
+Schema-invalid ответ получает не более одной contract-repair попытки.
+Original response рассматривается как недоверенные данные. Transport errors
+не запускают repair.
 
 Ограничения дерева:
 
@@ -449,10 +473,9 @@ Loop Engine
 
 ## Следующий этап
 
-1. Validated LLM atomicity/decomposition adapter.
+1. Coding-oriented leaf factory по validated metadata узла.
 2. Реальный Plugin Generator adapter для `CapabilityAcquirer`.
-3. Coding-oriented leaf factory по metadata узла.
-4. Parent integration verification через bounded commands.
-5. Process registry с owner/run id и heartbeat.
-6. Parallel execution только независимых ready leaves.
-7. Replay и сравнение decomposition strategies.
+3. Parent integration verification через bounded commands.
+4. Process registry с owner/run id и heartbeat.
+5. Parallel execution только независимых ready leaves.
+6. Replay и сравнение decomposition strategies.

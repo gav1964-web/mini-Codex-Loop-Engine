@@ -37,6 +37,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - persistent `TaskGraph` и versioned graph store;
 - iterative dependency scheduler;
 - deterministic atomicity/decomposition;
+- validated LLM atomicity/decomposition;
+- typed atomic leaf contract;
+- одноразовый bounded repair невалидного decomposition contract;
 - capability resolver и acquisition port;
 - `LoopEngineLeafExecutor`;
 - parent integration verification;
@@ -100,17 +103,31 @@ mini-Codex 7, а извлекает из неё общую идею управл
 50. Structured failure decomposer и integration verifier.
 51. Транзакционная проверка child keys/dependencies до изменения graph.
 52. Отклонение циклической decomposition.
+53. Применение validated atomic leaf contract до выполнения leaf.
+54. LLM decomposition parent в dependency-ordered children.
+55. Запрет пустых criteria и capabilities для LLM atomic leaf.
+56. Проверка child keys, dependency references и циклов в LLM proposal.
+57. Одноразовый repair schema-invalid decomposition.
+58. Блокировка повторно невалидного decomposition response.
+59. Запрет contract repair для transport errors.
+60. Ограничение decomposition context до вызова LLM.
+61. Compatibility unwrap для одиночных `response/atomic/decompose` wrappers.
+62. Отклонение противоречивых `atomic + children` и `non-atomic + leaf`.
 
 ## Результаты проверок
 
-- `pytest`: 63 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 76 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
 - checkpoint: полный state и event log сохранены.
 - живой gateway smoke 11 июня 2026 года: `read_text -> apply_patch ->
   run_verification`, status `completed`, verification exit code `0`;
-- wheel `0.7.0` собран и установлен в чистое Python 3.13 окружение;
+- wheel `0.7.0` был собран и установлен в чистое Python 3.13 окружение;
+- живой decomposition smoke 11 июня 2026 года: модель предложила и validator
+  принял DAG `locate_failing_test -> diagnose_failure -> apply_fix ->
+  verify_fix`;
+- wheel `0.8.0` успешно собран;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -155,13 +172,14 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.7.0` добавляет верхний уровень orchestration: задача доводится до
-атомарных листьев, листья выполняются существующим Loop Engine, а результаты
-поднимаются через parent integration verification.
+Версия `0.8.0` проверяет следующую гипотезу: LLM может предлагать структуру
+дерева и уточнять атомарный prompt, не получая права изменять graph напрямую.
+Deterministic adapter проверяет schema, bounds, keys, capabilities,
+dependencies, циклы и полноту leaf contract. Только после этого scheduler
+применяет proposal.
 
-Следующая существенная гипотеза — validated LLM decomposition. Модель должна
-предлагать children и dependencies, но deterministic runtime обязан проверять
-уникальность, depth/node budgets, циклы и наличие исполнимых leaf contracts.
+Следующий существенный шаг — связать atomic leaf contract с coding-oriented
+`LoopEngine` factory и подключить Plugin Generator через `CapabilityAcquirer`.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

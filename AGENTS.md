@@ -33,6 +33,10 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Task decomposition, capability resolution/acquisition, leaf execution, and
   parent integration must remain independent ports.
 - A non-atomic node must not execute directly; it must produce bounded children.
+- LLM decomposition must pass strict schema, dependency, cycle, and leaf-contract
+  validation before the scheduler mutates a graph.
+- An LLM-declared atomic leaf must have observable success criteria and explicit
+  required capabilities.
 - Parent completion requires completed children and an integration verifier result.
 - Plugin generation belongs behind `CapabilityAcquirer`, not inside the scheduler.
 

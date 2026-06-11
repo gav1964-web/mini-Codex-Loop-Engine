@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from loop_engine.tasks import (
+    AtomicLeafSpec,
+    AtomicityDecision,
     ChildTaskSpec,
     FunctionCapabilityAcquirer,
     FunctionIntegrationVerifier,
@@ -302,3 +306,53 @@ def test_cyclic_decomposition_is_rejected_before_children_are_added() -> None:
     )
     assert list(result.nodes) == ["root"]
     assert result.root.children == []
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected_error"),
+    [
+        (
+            AtomicityDecision(
+                is_atomic=True,
+                reason="contradictory",
+                children=[ChildTaskSpec(key="child", goal="Child")],
+            ),
+            "atomic_task_has_children",
+        ),
+        (
+            AtomicityDecision(
+                is_atomic=False,
+                reason="contradictory",
+                leaf=AtomicLeafSpec(
+                    goal="Leaf",
+                    success_criteria=["Done"],
+                    required_capabilities=["read"],
+                ),
+            ),
+            "non_atomic_task_has_leaf_contract",
+        ),
+    ],
+)
+def test_scheduler_rejects_contradictory_atomicity_contracts(
+    decision,
+    expected_error,
+) -> None:
+    class ContradictoryDecomposer:
+        def assess(self, node, task_graph):
+            return decision
+
+    result = TaskScheduler(
+        decomposer=ContradictoryDecomposer(),
+        capability_resolver=InMemoryCapabilityResolver({"read"}),
+        leaf_executor=FunctionLeafExecutor(
+            lambda node, task_graph: LeafExecutionResult(
+                status="completed",
+                summary="must not execute",
+            )
+        ),
+        integration_verifier=FunctionIntegrationVerifier(),
+    ).run(TaskGraph.create("Reject contradiction"))
+
+    assert result.root.status == TaskStatus.FAILED
+    assert result.root.error == expected_error
+    assert result.root.attempts == 0

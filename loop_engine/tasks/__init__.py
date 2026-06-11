@@ -7,6 +7,7 @@ from .adapters import (
     ScriptedTaskDecomposer,
 )
 from .models import (
+    AtomicLeafSpec,
     AtomicityDecision,
     CapabilityResolution,
     ChildTaskSpec,
@@ -17,14 +18,20 @@ from .models import (
     TaskNode,
     TaskStatus,
 )
+from .llm_decomposer import (
+    DecompositionContractError,
+    ValidatedLLMTaskDecomposer,
+)
 from .demo import build_task_demo
 from .persistence import JsonTaskGraphStore
 from .scheduler import TaskScheduler
 
 __all__ = [
+    "AtomicLeafSpec",
     "AtomicityDecision",
     "CapabilityResolution",
     "ChildTaskSpec",
+    "DecompositionContractError",
     "FunctionIntegrationVerifier",
     "FunctionLeafExecutor",
     "FunctionCapabilityAcquirer",
@@ -39,5 +46,6 @@ __all__ = [
     "TaskNode",
     "TaskScheduler",
     "TaskStatus",
+    "ValidatedLLMTaskDecomposer",
     "build_task_demo",
 ]

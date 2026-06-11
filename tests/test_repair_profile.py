@@ -55,7 +55,11 @@ def test_scripted_repair_loop_can_replan_to_second_patch(tmp_path) -> None:
         verification_command=[
             sys.executable,
             "-c",
-            "from target import value; raise SystemExit(0 if value == 2 else 1)",
+            (
+                "from pathlib import Path; ns = {}; "
+                "exec(Path('target.py').read_text(), ns); "
+                "raise SystemExit(0 if ns['value'] == 2 else 1)"
+            ),
         ],
     )
 

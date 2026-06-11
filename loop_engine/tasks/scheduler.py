@@ -103,7 +103,33 @@ class TaskScheduler:
             {"is_atomic": decision.is_atomic, "reason": decision.reason},
         )
         if decision.is_atomic:
+            if decision.children:
+                node.status = TaskStatus.FAILED
+                node.error = "atomic_task_has_children"
+                self._save(graph)
+                return
+            if decision.leaf is not None:
+                node.goal = decision.leaf.goal
+                node.success_criteria = list(decision.leaf.success_criteria)
+                node.required_capabilities = list(
+                    decision.leaf.required_capabilities
+                )
+                node.metadata.update(decision.leaf.metadata)
+                record_task_event(
+                    graph,
+                    "atomic_leaf_contract_applied",
+                    node.id,
+                    {
+                        "success_criteria": node.success_criteria,
+                        "required_capabilities": node.required_capabilities,
+                    },
+                )
             node.status = TaskStatus.READY
+            self._save(graph)
+            return
+        if decision.leaf is not None:
+            node.status = TaskStatus.FAILED
+            node.error = "non_atomic_task_has_leaf_contract"
             self._save(graph)
             return
         if not decision.children:

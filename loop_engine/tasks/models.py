@@ -36,10 +36,19 @@ class ChildTaskSpec:
 
 
 @dataclass(slots=True)
+class AtomicLeafSpec:
+    goal: str
+    success_criteria: list[str]
+    required_capabilities: list[str]
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class AtomicityDecision:
     is_atomic: bool
     reason: str
     children: list[ChildTaskSpec] = field(default_factory=list)
+    leaf: AtomicLeafSpec | None = None
 
 
 @dataclass(slots=True)

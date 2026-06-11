@@ -141,6 +141,8 @@ state = engine.run(definition)
 - LLM-planned inspect-edit-verify profile;
 - persistent `TaskGraph` and iterative dependency scheduler;
 - deterministic atomicity/decomposition adapter;
+- validated LLM atomicity/decomposition with one-shot contract repair;
+- typed atomic leaf contracts for goal, criteria, capabilities, and metadata;
 - capability resolver and acquisition port for Plugin Generator integration;
 - `LoopEngine`-backed atomic leaf executor;
 - parent integration verification and status propagation;
@@ -152,10 +154,11 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.7.0` adds a persistent Atomic Task Runtime above the existing
-`LoopEngine`. It can decompose deterministic task graphs, execute verified
-atomic leaves, resolve or acquire capabilities, propagate dependency failures,
-and verify parent integration. LLM decomposition and the real Plugin Generator
-adapter remain future layers.
+Version `0.8.0` adds validated LLM decomposition above the persistent Atomic
+Task Runtime. The model may propose immediate children and dependencies or a
+typed atomic leaf contract. Deterministic validation rejects unknown fields,
+invalid keys and capabilities, cycles, oversized payloads, and incomplete
+atomic leaves before the scheduler mutates the graph. The real Plugin Generator
+adapter and coding-oriented leaf factory remain future layers.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.
