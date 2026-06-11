@@ -82,6 +82,16 @@ default; only the environment variable name is stored in checkpoints.
 Malformed JSON or a schema-invalid plan receives at most one bounded
 contract-repair attempt. Disable it with `--contract-repair-attempts 0`.
 
+Run the deterministic Atomic Task Runtime demo:
+
+```bash
+python -m loop_engine task-demo --graphs task_graphs
+```
+
+It decomposes one parent into dependency-ordered atomic leaves, executes each
+leaf through the existing `LoopEngine`, verifies parent integration, and
+persists the full graph and event log.
+
 Installed CLI:
 
 ```bash
@@ -129,6 +139,11 @@ state = engine.run(definition)
 - bounded LLM context builder and strict plan validator;
 - one-shot bounded plan contract repair;
 - LLM-planned inspect-edit-verify profile;
+- persistent `TaskGraph` and iterative dependency scheduler;
+- deterministic atomicity/decomposition adapter;
+- capability resolver and acquisition port for Plugin Generator integration;
+- `LoopEngine`-backed atomic leaf executor;
+- parent integration verification and status propagation;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
 
@@ -137,9 +152,10 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.6.0` adds one-shot repair of malformed LLM plan contracts while
-keeping tools, verification, budgets, state transitions, and completion under
-deterministic control. It still excludes unrestricted shell access, parallel
-workers, and semantic self-correction outside the normal verified loop.
+Version `0.7.0` adds a persistent Atomic Task Runtime above the existing
+`LoopEngine`. It can decompose deterministic task graphs, execute verified
+atomic leaves, resolve or acquire capabilities, propagate dependency failures,
+and verify parent integration. LLM decomposition and the real Plugin Generator
+adapter remain future layers.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

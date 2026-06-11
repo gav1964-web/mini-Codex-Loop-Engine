@@ -16,6 +16,7 @@ from .profiles import (
     build_llm_repair_loop,
     build_scripted_repair_loop,
 )
+from .tasks import JsonTaskGraphStore, build_task_demo
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,6 +28,12 @@ def main(argv: list[str] | None = None) -> int:
     demo.add_argument("--target", type=int, default=3)
     demo.add_argument("--checkpoints", type=Path)
     demo.add_argument("--resume", metavar="RUN_ID")
+    task_demo = subparsers.add_parser(
+        "task-demo",
+        help="Run a deterministic dependency-ordered atomic task graph.",
+    )
+    task_demo.add_argument("--graphs", type=Path)
+    task_demo.add_argument("--resume", metavar="GRAPH_ID")
     check = subparsers.add_parser("check", help="Run one bounded coding verification command.")
     check.add_argument("--workspace", type=Path, default=Path.cwd())
     check.add_argument("--timeout", type=float, default=60.0)
@@ -78,6 +85,16 @@ def main(argv: list[str] | None = None) -> int:
         else:
             definition.metadata["target"] = max(1, args.target)
             state = engine.run(definition)
+    elif args.command == "task-demo":
+        scheduler, graph = build_task_demo(args.graphs)
+        if args.resume:
+            if not args.graphs:
+                parser.error("--resume requires --graphs")
+            graph = JsonTaskGraphStore(args.graphs).load(args.resume)
+        graph = scheduler.run(graph)
+        json.dump(graph.to_dict(), sys.stdout, ensure_ascii=False, indent=2, default=str)
+        sys.stdout.write("\n")
+        return 0 if graph.root.status == "completed" else 1
     elif args.command == "check":
         process_command = list(args.process_command)
         if process_command and process_command[0] == "--":

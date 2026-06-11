@@ -29,6 +29,12 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Contract repair may retry malformed LLM structure at most once.
 - Contract repair must not execute tools, alter goals, or reinterpret verification.
 - Transport failures are not contract errors and must not trigger repair prompts.
+- `TaskScheduler` is the only owner of task-node status transitions.
+- Task decomposition, capability resolution/acquisition, leaf execution, and
+  parent integration must remain independent ports.
+- A non-atomic node must not execute directly; it must produce bounded children.
+- Parent completion requires completed children and an integration verifier result.
+- Plugin generation belongs behind `CapabilityAcquirer`, not inside the scheduler.
 
 ## Testing
 
