@@ -29,10 +29,27 @@ class BoundedFilesystem:
         self.max_search_matches = max_search_matches
 
     def register(self, executor: ToolRegistryExecutor) -> None:
-        executor.register("list_files", self.list_files)
-        executor.register("read_text", self.read_text)
-        executor.register("search_text", self.search_text)
+        self.register_read_only(executor)
         executor.register("apply_patch", self.apply_patch)
+
+    def register_read_only(
+        self,
+        executor: ToolRegistryExecutor,
+        tools: set[str] | None = None,
+    ) -> None:
+        available = {
+            "list_files": self.list_files,
+            "read_text": self.read_text,
+            "search_text": self.search_text,
+        }
+        selected = set(available if tools is None else tools)
+        unknown = selected - set(available)
+        if unknown:
+            raise ValueError(f"unknown read-only filesystem tools: {sorted(unknown)}")
+        if not selected:
+            raise ValueError("read-only filesystem tools must be non-empty")
+        for name in sorted(selected):
+            executor.register(name, available[name])
 
     def list_files(self, arguments: dict[str, Any], state: LoopState) -> dict[str, Any]:
         base = self._resolve_existing(arguments.get("path", "."), require_directory=True)

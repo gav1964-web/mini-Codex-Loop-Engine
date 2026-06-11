@@ -147,6 +147,8 @@ state = engine.run(definition)
 - `LoopEngine`-backed atomic leaf executor;
 - coding leaf executor for bounded LLM repair and deterministic verification;
 - external immutable workspace and verification policy for coding leaves;
+- read-only evidence profile with restricted planning and criterion verification;
+- addressable evidence catalogue with strict reference validation;
 - parent integration verification and status propagation;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
@@ -156,11 +158,11 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.9.0` connects validated atomic coding contracts to real loop
-profiles. A leaf requiring `filesystem.patch` plus `process.verify` runs through
-the bounded LLM repair loop; a leaf requiring only `process.verify` runs the
-immutable deterministic coding check. Workspace, commands, gateway settings,
-and credentials cannot be supplied by LLM metadata. Read-only evidence leaves
-remain explicitly blocked until they have a dedicated evidence verifier.
+Version `0.10.0` completes the first coding leaf set. Read-only leaves run with
+only their declared list/read/search tools and are completed only after a
+strict LLM evidence assessment covers every success criterion with valid
+catalogue references. Repair and verification leaves continue to use bounded
+LLM repair and immutable deterministic commands. Execution authority remains
+outside model-generated metadata.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

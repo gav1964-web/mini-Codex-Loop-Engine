@@ -1,4 +1,5 @@
 from .filesystem import BoundedFilesystem
+from .evidence_verifier import EvidenceContractError, ValidatedEvidenceVerifier
 from .llm_http import LLMJSONDecodeError, OpenAICompatibleJSONClient, parse_json_object
 from .llm_planner import PlanContractError, ValidatedLLMPlanner
 from .scripted import CriteriaJudge, FunctionPlanner, FunctionVerifier
@@ -9,6 +10,7 @@ __all__ = [
     "BoundedSubprocessTool",
     "BoundedFilesystem",
     "CriteriaJudge",
+    "EvidenceContractError",
     "FunctionPlanner",
     "FunctionVerifier",
     "LLMJSONDecodeError",
@@ -17,5 +19,6 @@ __all__ = [
     "SubprocessSpec",
     "ToolRegistryExecutor",
     "ValidatedLLMPlanner",
+    "ValidatedEvidenceVerifier",
     "parse_json_object",
 ]

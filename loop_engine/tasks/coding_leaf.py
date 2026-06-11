@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..ports import JSONLLMClient
-from ..profiles import build_coding_check_loop, build_llm_repair_loop
+from ..profiles import (
+    build_coding_check_loop,
+    build_llm_evidence_loop,
+    build_llm_repair_loop,
+)
 from .adapters import LoopEngineLeafExecutor
 from .models import LeafExecutionResult, TaskGraph, TaskNode
 
@@ -21,6 +25,11 @@ _KNOWN_CAPABILITIES = {
     *_READ_CAPABILITIES,
     _PATCH_CAPABILITY,
     _VERIFY_CAPABILITY,
+}
+_CAPABILITY_TO_TOOL = {
+    "filesystem.list": "list_files",
+    "filesystem.read": "read_text",
+    "filesystem.search": "search_text",
 }
 _RESERVED_METADATA = {
     "api_key",
@@ -51,7 +60,7 @@ class CodingLeafPolicy:
         cls,
         *,
         workspace_root: str | Path,
-        verification_command: list[str] | tuple[str, ...],
+        verification_command: list[str] | tuple[str, ...] = (),
         subprocess_timeout_seconds: float = 60.0,
         max_output_bytes: int = 64 * 1024,
         max_iterations: int = 4,
@@ -64,8 +73,8 @@ class CodingLeafPolicy:
         command = tuple(str(item) for item in verification_command)
         if not root.is_dir():
             raise ValueError("coding leaf workspace_root must be an existing directory")
-        if not command or any(not item for item in command):
-            raise ValueError("coding leaf verification_command is required")
+        if any(not item for item in command):
+            raise ValueError("coding leaf verification_command items must be non-empty")
         if subprocess_timeout_seconds <= 0 or max_output_bytes <= 0:
             raise ValueError("coding leaf subprocess bounds must be positive")
         if max_iterations <= 0 or max_actions <= 0 or max_actions_per_plan <= 0:
@@ -114,6 +123,14 @@ class CodingLeafExecutor:
             )
 
         capabilities = set(node.required_capabilities)
+        if (
+            _VERIFY_CAPABILITY in capabilities or _PATCH_CAPABILITY in capabilities
+        ) and not self.policy.verification_command:
+            return LeafExecutionResult(
+                status="blocked",
+                summary="coding leaf verification command is unavailable",
+                error="coding_leaf_verification_command_missing",
+            )
         if capabilities == {_VERIFY_CAPABILITY}:
             profile = "coding_check"
             delegate = LoopEngineLeafExecutor(self._build_check)
@@ -127,12 +144,14 @@ class CodingLeafExecutor:
             profile = "llm_repair"
             delegate = LoopEngineLeafExecutor(self._build_repair)
         else:
-            return LeafExecutionResult(
-                status="blocked",
-                summary="read-only evidence leaves are not executable yet",
-                error="unsupported_read_only_coding_leaf",
-                evidence={"required_capabilities": sorted(capabilities)},
-            )
+            if self.llm_client is None:
+                return LeafExecutionResult(
+                    status="blocked",
+                    summary="read-only evidence leaf requires an LLM client",
+                    error="coding_leaf_llm_client_missing",
+                )
+            profile = "llm_evidence"
+            delegate = LoopEngineLeafExecutor(self._build_evidence)
 
         result = delegate.execute(node, graph)
         result.evidence["coding_leaf_profile"] = profile
@@ -148,6 +167,30 @@ class CodingLeafExecutor:
         )
         definition.goal = node.goal
         definition.success_criteria = list(node.success_criteria)
+        definition.metadata["task_graph_id"] = graph.id
+        definition.metadata["task_node_id"] = node.id
+        return engine, definition
+
+    def _build_evidence(self, node: TaskNode, graph: TaskGraph):
+        if self.llm_client is None:
+            raise RuntimeError("coding leaf LLM client is unavailable")
+        allowed_tools = {
+            _CAPABILITY_TO_TOOL[capability]
+            for capability in node.required_capabilities
+        }
+        engine, definition = build_llm_evidence_loop(
+            workspace_root=self.policy.workspace_root,
+            goal=node.goal,
+            success_criteria=node.success_criteria,
+            llm_client=self.llm_client,
+            allowed_tools=allowed_tools,
+            max_iterations=self.policy.max_iterations,
+            max_actions=self.policy.max_actions,
+            max_actions_per_plan=self.policy.max_actions_per_plan,
+            contract_repair_attempts=self.policy.contract_repair_attempts,
+            checkpoint_root=self.policy.checkpoint_root,
+            llm_metadata=self.llm_metadata,
+        )
         definition.metadata["task_graph_id"] = graph.id
         definition.metadata["task_node_id"] = node.id
         return engine, definition

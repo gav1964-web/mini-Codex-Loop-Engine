@@ -177,24 +177,73 @@ def test_dependency_ordered_repair_then_verify_task_tree(tmp_path) -> None:
     assert target.read_text(encoding="utf-8") == "value = 2\n"
 
 
-def test_read_only_leaf_is_explicitly_blocked_until_evidence_verifier_exists(
-    tmp_path,
-) -> None:
+def test_read_only_leaf_uses_evidence_profile(tmp_path) -> None:
+    (tmp_path / "target.py").write_text(
+        "def calculate_total(items):\n    return sum(items)\n",
+        encoding="utf-8",
+    )
+    criterion = "target.py defines calculate_total"
+    client = SequenceClient(
+        [
+            {
+                "actions": [
+                    {
+                        "tool": "read_text",
+                        "arguments": {"path": "target.py"},
+                    }
+                ]
+            },
+            {
+                "criteria": [
+                    {
+                        "criterion": criterion,
+                        "satisfied": True,
+                        "evidence_refs": ["evidence:0"],
+                        "reason": "direct function definition",
+                    }
+                ],
+                "missing_evidence": [],
+                "summary": "criterion supported",
+            },
+        ]
+    )
     graph = TaskGraph.create(
         "Inspect target",
-        success_criteria=["Relevant source evidence is collected"],
+        success_criteria=[criterion],
         required_capabilities=["filesystem.read"],
     )
     result = TaskScheduler(
         decomposer=ScriptedTaskDecomposer({}),
         capability_resolver=InMemoryCapabilityResolver({"filesystem.read"}),
-        leaf_executor=CodingLeafExecutor(_policy(tmp_path)),
+        leaf_executor=CodingLeafExecutor(
+            CodingLeafPolicy.create(workspace_root=tmp_path),
+            llm_client=client,
+        ),
+        integration_verifier=FunctionIntegrationVerifier(),
+    ).run(graph)
+
+    assert result.root.status == TaskStatus.COMPLETED
+    assert result.root.attempts == 1
+    assert result.root.result.evidence["coding_leaf_profile"] == "llm_evidence"
+
+
+def test_verify_leaf_without_external_command_is_blocked(tmp_path) -> None:
+    graph = TaskGraph.create(
+        "Verify target",
+        success_criteria=["Verification passes"],
+        required_capabilities=["process.verify"],
+    )
+    result = TaskScheduler(
+        decomposer=ScriptedTaskDecomposer({}),
+        capability_resolver=InMemoryCapabilityResolver({"process.verify"}),
+        leaf_executor=CodingLeafExecutor(
+            CodingLeafPolicy.create(workspace_root=tmp_path)
+        ),
         integration_verifier=FunctionIntegrationVerifier(),
     ).run(graph)
 
     assert result.root.status == TaskStatus.BLOCKED
-    assert result.root.error == "unsupported_read_only_coding_leaf"
-    assert result.root.attempts == 1
+    assert result.root.error == "coding_leaf_verification_command_missing"
 
 
 def test_patch_leaf_requires_verification_capability(tmp_path) -> None:

@@ -49,6 +49,7 @@ class ValidatedLLMPlanner:
         self,
         client: JSONLLMClient,
         *,
+        allowed_tools: set[str] | None = None,
         max_actions_per_plan: int = 5,
         max_context_chars: int = 24_000,
         max_result_chars: int = 8_000,
@@ -59,7 +60,16 @@ class ValidatedLLMPlanner:
             raise ValueError("contract_repair_attempts must be 0 or 1")
         if max_repair_source_chars <= 0:
             raise ValueError("max_repair_source_chars must be positive")
+        normalized_tools = set(
+            _ACTION_ARGUMENTS if allowed_tools is None else allowed_tools
+        )
+        unknown_tools = normalized_tools - set(_ACTION_ARGUMENTS)
+        if unknown_tools:
+            raise ValueError(f"unknown allowed_tools: {sorted(unknown_tools)}")
+        if not normalized_tools:
+            raise ValueError("allowed_tools must be non-empty")
         self.client = client
+        self.allowed_tools = normalized_tools
         self.max_actions_per_plan = max_actions_per_plan
         self.max_context_chars = max_context_chars
         self.max_result_chars = max_result_chars
@@ -103,7 +113,7 @@ class ValidatedLLMPlanner:
                 "rationale": "short string",
                 "actions": [
                     {
-                        "tool": "list_files | read_text | search_text | apply_patch | run_verification",
+                        "tool": " | ".join(sorted(self.allowed_tools)),
                         "arguments": "JSON object allowed by the tool",
                         "reason": "short string",
                     }
@@ -166,6 +176,23 @@ class ValidatedLLMPlanner:
                 "Never claim completion; verifier and judge decide.",
             ],
         }
+        contract["capabilities"] = {
+            name: schema
+            for name, schema in contract["capabilities"].items()
+            if name in self.allowed_tools
+        }
+        if self.allowed_tools <= {"list_files", "read_text", "search_text"}:
+            contract["rules"] = [
+                rule
+                for rule in contract["rules"]
+                if rule not in {
+                    "Inspect before editing when evidence is insufficient.",
+                    "Run verification after a repair.",
+                }
+            ]
+            contract["rules"].append(
+                "This profile is read-only; do not propose mutations or process execution."
+            )
         context: dict[str, Any] = {
             "goal": state.definition.goal,
             "success_criteria": state.definition.success_criteria,
@@ -252,6 +279,8 @@ class ValidatedLLMPlanner:
         tool = value.get("tool")
         if tool not in _ACTION_ARGUMENTS:
             raise ValueError(f"unknown tool: {tool}")
+        if tool not in self.allowed_tools:
+            raise ValueError(f"tool is not allowed by this profile: {tool}")
         arguments = value.get("arguments", {})
         if not isinstance(arguments, dict):
             raise ValueError("action arguments must be a JSON object")

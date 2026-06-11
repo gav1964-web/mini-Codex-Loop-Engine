@@ -43,6 +43,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - coding leaf policy и executor;
 - отображение atomic repair/verify contracts на реальные Loop Engine profiles;
 - запрет execution authority в LLM metadata;
+- restricted read-only LLM planner;
+- addressable bounded evidence catalogue;
+- strict criterion-by-criterion evidence verifier;
 - capability resolver и acquisition port;
 - `LoopEngineLeafExecutor`;
 - parent integration verification;
@@ -123,10 +126,23 @@ mini-Codex 7, а извлекает из неё общую идею управл
 67. Запрет workspace/command override через task metadata.
 68. Structured block repair leaf без LLM client.
 69. Structured block read-only leaf до появления evidence verifier.
+70. Выполнение read-only leaf через list/read/search-only profile.
+71. Запрет mutation plan до action execution.
+72. Проверка каждого success criterion ровно один раз.
+73. Запрет неизвестных evidence refs.
+74. Запрет satisfied criterion без evidence refs.
+75. Одноразовый repair evidence contract.
+76. Replan по missing evidence и завершение после дополнительного чтения.
+77. Read-only leaf без фиктивной verification command.
+78. Structured block verify/repair leaf без внешней verification command.
+79. Запрет evidence contract repair для transport errors.
+80. Физическое отсутствие `apply_patch` в read-only executor registry.
+81. Registry содержит только capability-declared read tools.
+82. Явный пустой `allowed_tools` отклоняется, а не расширяется до defaults.
 
 ## Результаты проверок
 
-- `pytest`: 83 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 93 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -142,6 +158,10 @@ mini-Codex 7, а извлекает из неё общую идею управл
   contract в `CodingLeafExecutor`, LLM repair изменил `value = 1` на
   `value = 2`, immutable verification command завершилась с exit code `0`;
 - wheel `0.9.0` успешно собран;
+- живой read-only evidence smoke 11 июня 2026 года: leaf за две итерации
+  обнаружил `RetryPolicy.max_attempts = 3`, завершил criterion со ссылкой
+  `evidence:1` и не имел mutation/process capabilities;
+- wheel `0.10.0` успешно собран;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -186,15 +206,14 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.9.0` связывает validated atomic contract с реальным исполнением.
-Repair leaf использует bounded LLM repair loop, verify leaf — deterministic
-coding check. Workspace и verification command задаются внешней policy и не
-могут быть подменены model-generated metadata.
+Версия `0.10.0` завершает первый набор coding leaves: read-only evidence,
+bounded repair и deterministic verification. Диагностический leaf теперь может
+собирать факты несколькими итерациями и завершаться только после
+criterion-by-criterion assessment со ссылками на реальный evidence catalogue.
 
-Следующий существенный шаг — read-only evidence verifier. Без него корректно
-построенный диагностический DAG обязан остановиться на inspect/diagnose leaf,
-поскольку факт чтения файлов ещё не является доказательством достижения цели.
-После этого можно подключать Plugin Generator через `CapabilityAcquirer`.
+Следующий существенный шаг — Plugin Generator через `CapabilityAcquirer`.
+После него task tree сможет не только использовать встроенные coding
+capabilities, но и приобретать отсутствующие reusable возможности.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
