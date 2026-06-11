@@ -44,6 +44,10 @@ This project is a universal loop engine, not a coding-agent implementation.
   evidence catalogue ids.
 - Parent completion requires completed children and an integration verifier result.
 - Plugin generation belongs behind `CapabilityAcquirer`, not inside the scheduler.
+- Plugin family selection must come from external acquisition policy, never
+  directly from task metadata or generated model output.
+- Generated capabilities are available only while all admitted artifact hashes
+  remain current. Acquisition does not authorize runtime invocation.
 
 ## Testing
 

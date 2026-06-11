@@ -149,6 +149,8 @@ state = engine.run(definition)
 - external immutable workspace and verification policy for coding leaves;
 - read-only evidence profile with restricted planning and criterion verification;
 - addressable evidence catalogue with strict reference validation;
+- bounded subprocess adapter to the standalone Plugin Generator;
+- persistent generated-capability registry with artifact integrity checks;
 - parent integration verification and status propagation;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
@@ -158,11 +160,11 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.10.0` completes the first coding leaf set. Read-only leaves run with
-only their declared list/read/search tools and are completed only after a
-strict LLM evidence assessment covers every success criterion with valid
-catalogue references. Repair and verification leaves continue to use bounded
-LLM repair and immutable deterministic commands. Execution authority remains
-outside model-generated metadata.
+Version `0.11.0` connects `CapabilityAcquirer` to the standalone Plugin
+Generator through its public JSON CLI. An external allowlist maps capability
+names to plugin families. Generated bundles are admitted only after bounded
+process execution, strict path and manifest validation, and SHA-256 checks for
+all required files. Acquisition and runtime invocation remain separate
+admission stages; generated code is not automatically executed.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

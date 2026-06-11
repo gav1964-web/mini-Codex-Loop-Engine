@@ -23,6 +23,12 @@ from .llm_decomposer import (
     ValidatedLLMTaskDecomposer,
 )
 from .coding_leaf import CodingLeafExecutor, CodingLeafPolicy
+from .plugin_acquisition import (
+    GeneratedCapability,
+    PersistentCapabilityRegistry,
+    PluginAcquisitionPolicy,
+    PluginGeneratorAcquirer,
+)
 from .demo import build_task_demo
 from .persistence import JsonTaskGraphStore
 from .scheduler import TaskScheduler
@@ -42,6 +48,10 @@ __all__ = [
     "JsonTaskGraphStore",
     "LeafExecutionResult",
     "LoopEngineLeafExecutor",
+    "GeneratedCapability",
+    "PersistentCapabilityRegistry",
+    "PluginAcquisitionPolicy",
+    "PluginGeneratorAcquirer",
     "ScriptedTaskDecomposer",
     "TaskBudget",
     "TaskEvent",

@@ -423,6 +423,45 @@ Plugin Generator должен реализовать `CapabilityAcquirer`. Sched
 как создаётся plugin, и не импортирует generator. Он только фиксирует запрос,
 повторно вызывает resolver и блокирует leaf, если capability не появилась.
 
+В `0.11.0` это реализовано через два независимых компонента.
+
+`PluginGeneratorAcquirer`:
+
+- вызывает standalone проект `4` только через публичный JSON CLI;
+- запускает процесс через bounded process-tree supervisor;
+- принудительно использует UTF-8 stdout на Windows;
+- берёт family из внешнего allowlist `capability -> family`;
+- не принимает family, interpreter, output root или constraints из task metadata;
+- проверяет exit code, timeout и output truncation;
+- проверяет JSON status, plugin id, family и materialized root;
+- разрешает только `plugin.py`, `manifest.json`, `README.md`;
+- проверяет manifest entrypoint и requested capability.
+
+`PersistentCapabilityRegistry`:
+
+- реализует `CapabilityResolver`;
+- атомарно сохраняет versioned JSON state;
+- имеет обязательный artifact root и отклоняет descriptors за его пределами;
+- хранит family, plugin id, paths и SHA-256 всех обязательных файлов;
+- при каждом resolve повторно проверяет наличие и hashes;
+- считает tampered/stale artifact отсутствующей capability.
+
+Последовательность:
+
+```text
+missing capability
+  -> external family admission policy
+  -> bounded Plugin Generator CLI
+  -> bundle/manifest/hash admission
+  -> persistent registry
+  -> resolve again
+  -> leaf execute / block
+```
+
+Acquisition ещё не даёт права запускать generated code. Runtime invocation
+потребует отдельного payload contract, sandbox policy, output validation и
+собственного adapter-а.
+
 ### Leaf Execution
 
 `LoopEngineLeafExecutor` строит task-specific `LoopEngine + LoopDefinition`,
@@ -535,7 +574,7 @@ Loop Engine
 
 ## Следующий этап
 
-1. Реальный Plugin Generator adapter для `CapabilityAcquirer`.
+1. Bounded runtime invocation для admitted generated plugins.
 2. Parent integration verification через bounded commands.
 3. Process registry с owner/run id и heartbeat.
 4. Parallel execution только независимых ready leaves.

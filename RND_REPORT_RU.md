@@ -46,6 +46,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - restricted read-only LLM planner;
 - addressable bounded evidence catalogue;
 - strict criterion-by-criterion evidence verifier;
+- bounded Plugin Generator acquisition adapter;
+- persistent generated capability registry;
+- artifact hash validation и tamper-driven reacquisition;
 - capability resolver и acquisition port;
 - `LoopEngineLeafExecutor`;
 - parent integration verification;
@@ -139,10 +142,20 @@ mini-Codex 7, а извлекает из неё общую идею управл
 80. Физическое отсутствие `apply_patch` в read-only executor registry.
 81. Registry содержит только capability-declared read tools.
 82. Явный пустой `allowed_tools` отклоняется, а не расширяется до defaults.
+83. Scheduler cycle `missing -> acquire -> resolve again -> execute`.
+84. External allowlist `capability -> plugin family`.
+85. Bounded JSON CLI invocation standalone проекта `4`.
+86. Проверка materialized root и обязательного file set.
+87. Проверка manifest family, entrypoint и requested capability.
+88. Persistent versioned capability registry.
+89. Идемпотентный повтор acquisition.
+90. Reacquisition после изменения generated artifact.
+91. Structured block для unmapped capability и corrupt manifest.
+92. Registry artifact root и запрет внешних descriptor paths.
 
 ## Результаты проверок
 
-- `pytest`: 93 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 100 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -162,6 +175,11 @@ mini-Codex 7, а извлекает из неё общую идею управл
   обнаружил `RetryPolicy.max_attempts = 3`, завершил criterion со ссылкой
   `evidence:1` и не имел mutation/process capabilities;
 - wheel `0.10.0` успешно собран;
+- живой Plugin Generator smoke 11 июня 2026 года: scheduler приобрёл
+  `project.loc_report` через публичный CLI проекта `4`, проверил bundle
+  `plugin.py/manifest.json/README.md`, записал registry и завершил leaf после
+  повторного resolve;
+- wheel `0.11.0` успешно собран;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -206,14 +224,14 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.10.0` завершает первый набор coding leaves: read-only evidence,
-bounded repair и deterministic verification. Диагностический leaf теперь может
-собирать факты несколькими итерациями и завершаться только после
-criterion-by-criterion assessment со ссылками на реальный evidence catalogue.
+Версия `0.11.0` добавляет acquisition отсутствующих reusable capabilities.
+Family выбирается внешней policy, standalone Plugin Generator запускается
+bounded subprocess-ом, а созданный bundle проходит независимую проверку
+manifest, paths и hashes до регистрации.
 
-Следующий существенный шаг — Plugin Generator через `CapabilityAcquirer`.
-После него task tree сможет не только использовать встроенные coding
-capabilities, но и приобретать отсутствующие reusable возможности.
+Следующий существенный шаг — bounded invocation admitted generated plugins.
+Acquisition и execution сознательно разделены: наличие корректного bundle ещё
+не означает право исполнять его код или доверять его output.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
