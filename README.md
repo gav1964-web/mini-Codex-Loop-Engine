@@ -35,6 +35,13 @@ Run a bounded coding verification command:
 python -m loop_engine check --workspace . --timeout 60 -- python -m pytest
 ```
 
+Resume an interrupted run:
+
+```bash
+python -m loop_engine demo --checkpoints checkpoints --resume RUN_ID
+python -m loop_engine check --checkpoints checkpoints --resume RUN_ID
+```
+
 Installed CLI:
 
 ```bash
@@ -72,6 +79,8 @@ state = engine.run(definition)
 - process-tree termination on timeout;
 - bounded stdout and stderr capture;
 - verification-only coding loop profile;
+- versioned JSON checkpoints;
+- phase-aware recovery without repeating checkpointed actions;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
 
@@ -80,9 +89,10 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.2.0` is a deterministic MVP with bounded subprocess execution and a
-first coding verification profile. It deliberately excludes LLM provider code,
-filesystem editing, autonomous repair, and distributed workers until their
-contracts can be added without weakening the loop kernel.
+Version `0.3.0` is a deterministic MVP with bounded subprocess execution,
+phase-aware checkpoint recovery, and a first coding verification profile. It
+deliberately excludes LLM provider code, filesystem editing, autonomous repair,
+and distributed workers until their contracts can be added without weakening
+the loop kernel.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

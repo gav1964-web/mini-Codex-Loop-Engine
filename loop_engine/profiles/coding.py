@@ -115,6 +115,11 @@ def build_coding_check_loop(
             max_actions=1,
             timeout_seconds=max(timeout_seconds + 10, 15),
         ),
-        metadata={"workspace_root": str(Path(workspace_root).resolve()), "command": list(command)},
+        metadata={
+            "workspace_root": str(Path(workspace_root).resolve()),
+            "command": list(command),
+            "subprocess_timeout_seconds": timeout_seconds,
+            "max_output_bytes": max_output_bytes,
+        },
     )
     return engine, definition

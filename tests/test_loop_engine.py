@@ -28,7 +28,8 @@ def test_counter_loop_completes_and_records_events(tmp_path) -> None:
     assert state.events[-1].event_type == "loop_completed"
 
     checkpoint = json.loads((tmp_path / "counter.json").read_text(encoding="utf-8"))
-    assert checkpoint["status"] == "completed"
+    assert checkpoint["schema_version"] == 1
+    assert checkpoint["state"]["status"] == "completed"
 
 
 def test_repeated_observation_stops_stagnant_loop() -> None:

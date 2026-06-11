@@ -64,6 +64,39 @@ criteria и дополнительные данные.
 Сохраняет состояние после каждого значимого перехода. Текущая реализация
 записывает JSON атомарно через временный файл.
 
+## Phase-aware Recovery
+
+`LoopState.phase` явно фиксирует стадию:
+
+- `ready`;
+- `planning`;
+- `executing`;
+- `verifying`;
+- `judging`;
+- `terminal`.
+
+Checkpoint дополнительно хранит `next_action_index` и `iteration_results`.
+После перезапуска `LoopEngine.resume()`:
+
+- строит plan заново только если сбой произошёл на `planning`;
+- продолжает только оставшиеся actions на `executing`;
+- не повторяет checkpointed actions перед `verifying`;
+- не повторяет verifier перед `judging`;
+- сохраняет исходные budgets, event log и observation signatures.
+
+Формат checkpoint имеет `schema_version`. Legacy checkpoint версии `0.2.0`
+загружается на консервативной границе новой итерации.
+
+### Граница гарантии
+
+Уже завершённый и записанный в checkpoint action не выполняется повторно.
+Однако при аварии непосредственно внутри action до сохранения результата
+невозможно определить, успел ли внешний side effect произойти. Такой action
+может быть запущен повторно после recovery.
+
+Текущая модель даёт at-least-once для in-flight actions. Для опасных операций
+нужны идемпотентные tools, idempotency keys либо transactional adapter.
+
 ## Stop Policy
 
 Цикл останавливается при:
@@ -137,8 +170,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Восстановление `LoopState` из checkpoint.
-2. Process registry с owner/run id и heartbeat поверх существующего supervisor.
+1. Process registry с owner/run id и heartbeat поверх существующего supervisor.
+2. Idempotency contract для side-effecting actions.
 3. Bounded filesystem inspect/edit tools.
 4. JSON-contract LLM planner/judge adapters.
 5. Plugin Generator как динамический source новых tools.

@@ -20,6 +20,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - ограниченный захват stdout/stderr;
 - запрет выхода рабочего каталога за workspace root;
 - первый verification-only coding profile;
+- versioned checkpoint envelope;
+- десериализация полного `LoopState`;
+- phase-aware recovery через CLI и API;
 - function adapters для planner и verifier;
 - deterministic criteria judge;
 - JSON CLI;
@@ -36,15 +39,21 @@ mini-Codex 7, а извлекает из неё общую идею управл
 7. Ограничение большого stdout без блокировки процесса.
 8. Запрет `cwd` вне workspace.
 9. Успех и ошибка coding verification по реальному exit code.
+10. Recovery с фазы выполнения только оставшихся actions.
+11. Recovery с verifier без повторения завершённого action.
+12. Recovery с judge без повторения verifier.
+13. Безопасная загрузка legacy checkpoint.
+14. Защита `run_id` от path traversal.
+15. CLI resume из сохранённого checkpoint.
 
 ## Результаты проверок
 
-- `pytest`: 10 passed;
+- `pytest`: 16 passed;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
 - checkpoint: полный state и event log сохранены.
-- wheel `0.2.0` собран, установлен в отдельный Python 3.13 venv и CLI успешно
+- wheel `0.3.0` собран, установлен в отдельный Python 3.13 venv и CLI успешно
   запущен вне дерева исходников.
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
 
@@ -74,7 +83,6 @@ strategy.
 
 - LLM API;
 - filesystem editor;
-- восстановление state из JSON;
 - parallel actions;
 - multi-agent delegation;
 - Plugin Generator adapter;
@@ -90,7 +98,11 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.2.0` закрывает нижний execution layer. Следующая существенная
-гипотеза — добавить bounded filesystem tools и planner, способный строить цикл
-`inspect -> edit -> verify -> repair`, не получая прямого контроля над
-переходами state machine.
+Версия `0.3.0` закрывает базовый execution и recovery layer. Следующая
+существенная гипотеза — добавить bounded filesystem tools и planner, способный
+строить цикл `inspect -> edit -> verify -> repair`, не получая прямого контроля
+над переходами state machine.
+
+Recovery не обещает exactly-once для action, оборванного внутри внешнего side
+effect до записи checkpoint. Такие tools должны быть идемпотентными или
+использовать idempotency key.

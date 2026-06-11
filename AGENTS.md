@@ -17,6 +17,9 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Long-running subprocess adapters must use the bounded process-tree supervisor.
 - Completion requires verifier evidence and a judge decision.
 - Repeated observations must trigger stagnation handling.
+- Checkpoints must preserve the current loop phase and completed action index.
+- Recovery must not repeat actions whose results were durably checkpointed.
+- In-flight side effects are at-least-once unless a tool provides idempotency.
 
 ## Testing
 
