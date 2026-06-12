@@ -639,6 +639,60 @@ Leaf допускается в parallel batch, только если:
 mutation capabilities одного workspace не следует объявлять parallel-safe без
 отдельной resource isolation policy.
 
+### Resource Claims
+
+В `0.20.0` `TaskSchedulerPolicy` получил внешний immutable mapping
+`node.id -> tuple[ResourceClaim, ...]`.
+
+```text
+ready leaves
+  -> parallel-safe capability admission
+  -> mutation capability requires write claim
+  -> deterministic read/write conflict check
+  -> bounded non-conflicting batch
+```
+
+`ResourceClaim` содержит canonical resource identity и режим:
+
+- `read`;
+- `write`.
+
+Два `read` одного ресурса совместимы. Любое пересечение, где хотя бы один claim
+имеет режим `write`, является конфликтом.
+
+Для filesystem workspace следует использовать:
+
+```python
+ResourceClaim.workspace(path, mode="write")
+```
+
+Helper применяет `Path.resolve()` и platform `normcase`, поэтому эквивалентные
+написания одного пути получают одинаковую identity.
+
+Policy отдельно задаёт `mutation_capabilities`. Leaf с такой capability может
+попасть в parallel batch только при наличии хотя бы одного внешнего write claim.
+Без claim он выполняется последовательно. Claim mapping копируется и становится
+неизменяемым при создании policy.
+
+Claims выбираются только по exact `node.id`. `TaskNode.metadata` не может
+добавить, удалить или подменить ресурс. LLM decomposition поэтому не получает
+resource admission authority.
+
+Batch собирается детерминированно в порядке ready nodes. Конфликтующий leaf
+пропускается для текущего batch, но не блокирует более поздний независимый leaf.
+Например, `write(workspace A)`, второй `write(workspace A)` и
+`write(workspace B)` дают первый batch из первого и третьего leaves.
+
+Resource claims являются admission policy, а не sandbox или filesystem lock.
+Executor по-прежнему обязан применять bounded workspace policy, atomic writes и
+собственные OS-level ограничения.
+
+Канонический пример:
+
+```bash
+python -m examples.resource_claims_demo
+```
+
 Capability resolution и acquisition выполняются scheduler-ом последовательно до
 запуска threads. Каждый worker получает собственный snapshot `TaskNode` и
 `TaskGraph`. Worker не может изменить живые statuses, events или checkpoint.
@@ -1002,8 +1056,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Resource claims для безопасной параллельной mutation разных workspaces.
-2. Автоматизированная проверка sandbox backend в release gate.
-3. Явная judge policy для ranking decomposition strategies.
-4. Typed selectors для integration routes помимо exact node id.
-5. Bounded retention/pruning policy для process registry service.
+1. Автоматизированная проверка sandbox backend в release gate.
+2. Явная judge policy для ranking decomposition strategies.
+3. Typed selectors для integration routes помимо exact node id.
+4. Bounded retention/pruning policy для process registry service.
+5. Cross-process resource lease backend для нескольких scheduler processes.

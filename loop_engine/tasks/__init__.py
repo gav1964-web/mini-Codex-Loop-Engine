@@ -51,7 +51,7 @@ from .plugin_sandbox import (
 )
 from .demo import build_task_demo
 from .persistence import JsonTaskGraphStore
-from .parallel import TaskSchedulerPolicy
+from .parallel import ResourceClaim, TaskSchedulerPolicy
 from .replay import (
     DecompositionStrategyRunner,
     DecompositionTrace,
@@ -101,6 +101,7 @@ __all__ = [
     "RecordedTaskDecomposer",
     "RecordingTaskDecomposer",
     "ReplayTaskCase",
+    "ResourceClaim",
     "SandboxMount",
     "ScriptedTaskDecomposer",
     "TaskBudget",

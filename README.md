@@ -153,6 +153,7 @@ state = engine.run(definition)
 - owner/run-aware process registry with heartbeat and stale reaping;
 - bounded, interruptible service loop for periodic orphan reaping;
 - bounded parallel execution for explicitly admitted independent leaves;
+- immutable read/write resource claims for parallel workspace mutation;
 - context-bound decomposition replay and strategy comparison;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
@@ -167,20 +168,22 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.19.0` adds an explicitly owned service loop for periodic orphan
-reaping. It performs an immediate identity-safe sweep, waits through an
-interruptible stop event, and cannot exceed its configured cycle budget.
+Version `0.20.0` adds immutable external resource claims to parallel leaf
+admission. Mutation capabilities remain sequential unless the exact node has at
+least one write claim.
 
-Concurrent service runs on the same registry are rejected. Reaper exceptions and
-malformed results become structured failed reports, while every successful cycle
-records terminated/lost counts and reaped record ids.
+Read claims may share a resource; any overlap involving a write claim conflicts.
+The deterministic batch selector skips conflicting leaves and can still admit a
+later leaf that targets an independent canonical workspace.
 
-Run the service example with:
+Run the resource-claim example with:
 
 ```bash
-python -m examples.process_reaper_service_demo
+python -m examples.resource_claims_demo
 ```
 
+The process reaper example remains available as
+`python -m examples.process_reaper_service_demo`.
 The integration composition example remains available as
 `python -m examples.integration_composition_demo`.
 The decomposition comparison remains available as

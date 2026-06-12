@@ -39,6 +39,10 @@ This project is a universal loop engine, not a coding-agent implementation.
 - `TaskScheduler` is the only owner of task-node status transitions.
 - Parallel leaf execution must be explicitly bounded and limited to capabilities
   admitted as parallel-safe by external scheduler policy.
+- Parallel mutation requires immutable external resource claims. A mutation leaf
+  without at least one write claim must remain sequential.
+- Resource claims must use canonical resource identities; task metadata must not
+  grant, remove, or rewrite claims.
 - Worker threads must receive task-graph snapshots; only the scheduler thread may
   apply results, append events, or persist task graphs.
 - Decomposition replay must bind every recorded decision to a deterministic

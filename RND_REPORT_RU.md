@@ -62,6 +62,8 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - command digest persistence без raw argv;
 - bounded parallel execution independent ready leaves;
 - external parallel-safe capability allowlist;
+- immutable read/write resource claims;
+- canonical workspace claim identities;
 - snapshot-isolated leaf workers;
 - deterministic parallel result application;
 - fail-closed generated plugin sandbox contract;
@@ -256,10 +258,19 @@ mini-Codex 7, а извлекает из неё общую идею управл
 167. Одновременный второй service run одного registry отклоняется.
 168. Cycle report считает terminated/lost и сохраняет record ids.
 169. Policy отклоняет неположительные stale/interval/cycle bounds.
+170. Write claims разных workspaces допускают parallel mutation.
+171. Пересекающиеся write claims не попадают в один batch.
+172. Конфликтующий leaf не блокирует следующий независимый leaf.
+173. Mutation capability без write claim остаётся последовательной.
+174. Task metadata не может подменить external claims.
+175. Shared read claims совместимы, read/write конфликтуют.
+176. Claim mapping копируется и становится immutable.
+177. Прямой dataclass constructor не обходит validation.
+178. Workspace helper канонизирует эквивалентные paths.
 
 ## Результаты проверок
 
-- `pytest`: 164 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 173 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -307,6 +318,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - process reaper service targeted tests: 20 passed;
 - canonical process reaper service demo: 1 stale record terminated за 2 cycles;
 - wheel `0.19.0` успешно собран и проверен через публичные service exports;
+- resource claim + parallel scheduler targeted tests: 18 passed;
+- canonical resource claims demo: 2 independent workspace writes overlapped;
+- wheel `0.20.0` успешно собран и проверен через публичные claim exports;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -351,14 +365,14 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.19.0` добавляет bounded service loop для периодического orphan
-reaping. Host явно владеет запуском и stop event, а policy ограничивает stale
-threshold, interval и максимальное число cycles.
+Версия `0.20.0` добавляет external resource claims для безопасной параллельной
+mutation. Exact node route получает immutable read/write claims, а mutation
+capability без write claim остаётся последовательной.
 
-Первый sweep выполняется немедленно. Каждый цикл возвращает structured counts и
-record ids. Exception и malformed output завершаются fail-closed, concurrent
-service runs одного registry отклоняются. Встроенный subprocess timeout и
-service reaping остаются разными слоями lifecycle supervision.
+Read/read совместимы, любое пересечение с write конфликтует. Batch selector
+пропускает конфликтующий leaf и продолжает искать независимый ресурс.
+Workspace helper канонизирует paths. Metadata не имеет claim authority, а
+scheduler и worker execution contracts не изменены.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
