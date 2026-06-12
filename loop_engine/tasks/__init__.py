@@ -29,6 +29,11 @@ from .plugin_acquisition import (
     PluginAcquisitionPolicy,
     PluginGeneratorAcquirer,
 )
+from .plugin_runtime import (
+    GeneratedPluginLeafExecutor,
+    PluginInvocationPolicy,
+    PluginInvocationSpec,
+)
 from .demo import build_task_demo
 from .persistence import JsonTaskGraphStore
 from .scheduler import TaskScheduler
@@ -49,9 +54,12 @@ __all__ = [
     "LeafExecutionResult",
     "LoopEngineLeafExecutor",
     "GeneratedCapability",
+    "GeneratedPluginLeafExecutor",
     "PersistentCapabilityRegistry",
     "PluginAcquisitionPolicy",
     "PluginGeneratorAcquirer",
+    "PluginInvocationPolicy",
+    "PluginInvocationSpec",
     "ScriptedTaskDecomposer",
     "TaskBudget",
     "TaskEvent",

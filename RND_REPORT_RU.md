@@ -49,6 +49,10 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - bounded Plugin Generator acquisition adapter;
 - persistent generated capability registry;
 - artifact hash validation и tamper-driven reacquisition;
+- policy-driven invocation admitted generated plugins;
+- isolated hash-verifying plugin worker;
+- timeout/process-tree/output bounds для generated plugin execution;
+- strict JSON output validation generated plugins;
 - capability resolver и acquisition port;
 - `LoopEngineLeafExecutor`;
 - parent integration verification;
@@ -152,10 +156,18 @@ mini-Codex 7, а извлекает из неё общую идею управл
 90. Reacquisition после изменения generated artifact.
 91. Structured block для unmapped capability и corrupt manifest.
 92. Registry artifact root и запрет внешних descriptor paths.
+93. End-to-end `missing -> acquire -> admit -> invoke -> validate`.
+94. Запуск generated plugin только по external invocation allowlist.
+95. Запрет task metadata override для plugin payload.
+96. Повторная SHA-256 проверка исполняемых байтов в child worker.
+97. Timeout generated plugin с завершением process tree.
+98. Structured failure для non-object plugin output.
+99. Structured block для capability без invocation admission.
+100. Подавление произвольного plugin stdout до JSON envelope.
 
 ## Результаты проверок
 
-- `pytest`: 100 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 106 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -180,6 +192,8 @@ mini-Codex 7, а извлекает из неё общую идею управл
   `plugin.py/manifest.json/README.md`, записал registry и завершил leaf после
   повторного resolve;
 - wheel `0.11.0` успешно собран;
+- bounded generated plugin runtime targeted tests: 13 passed;
+- wheel `0.12.0` успешно собран;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -211,7 +225,7 @@ strategy.
 - прямые SDK конкретных LLM-провайдеров;
 - parallel actions;
 - multi-agent delegation;
-- Plugin Generator adapter;
+- OS-level sandbox для generated plugins;
 - расширенная coding-specific verification помимо exit code;
 - human approval gates.
 
@@ -224,14 +238,18 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.11.0` добавляет acquisition отсутствующих reusable capabilities.
-Family выбирается внешней policy, standalone Plugin Generator запускается
-bounded subprocess-ом, а созданный bundle проходит независимую проверку
-manifest, paths и hashes до регистрации.
+Версия `0.12.0` добавляет bounded invocation admitted generated plugins.
+Acquisition и execution сознательно разделены: корректный bundle сначала
+регистрируется, а право запуска получает только через отдельную external
+invocation policy. Payload не берётся из task metadata. Child worker повторно
+проверяет hash исполняемых байтов, запускается с isolated Python mode и
+возвращает strict JSON envelope, который executor валидирует до завершения leaf.
 
-Следующий существенный шаг — bounded invocation admitted generated plugins.
-Acquisition и execution сознательно разделены: наличие корректного bundle ещё
-не означает право исполнять его код или доверять его output.
+Текущая изоляция ограничивает процесс по времени, дереву дочерних процессов и
+размеру вывода, но не отнимает у generated code права пользователя на файлы и
+сеть. Следующий security-шаг — отдельный OS-level sandbox/container runner,
+если плагины перестанут считаться локально сгенерированными доверенными
+артефактами.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

@@ -7,10 +7,13 @@ from pathlib import Path
 from loop_engine.tasks import (
     FunctionIntegrationVerifier,
     FunctionLeafExecutor,
+    GeneratedPluginLeafExecutor,
     LeafExecutionResult,
     PersistentCapabilityRegistry,
     PluginAcquisitionPolicy,
     PluginGeneratorAcquirer,
+    PluginInvocationPolicy,
+    PluginInvocationSpec,
     ScriptedTaskDecomposer,
     TaskGraph,
     TaskScheduler,
@@ -153,6 +156,43 @@ def test_missing_capability_is_generated_validated_and_persisted(tmp_path) -> No
         event.event_type == "capability_acquisition_requested"
         for event in result.events
     )
+
+
+def test_scheduler_acquires_then_invokes_generated_plugin(tmp_path) -> None:
+    generator_root = tmp_path / "generator"
+    _fake_generator(generator_root)
+    registry = _registry(tmp_path)
+    acquirer = PluginGeneratorAcquirer(
+        _policy(generator_root, tmp_path / "generated"),
+        registry,
+    )
+    executor = GeneratedPluginLeafExecutor(
+        registry,
+        PluginInvocationPolicy.create(
+            invocations={
+                "project.loc_report": PluginInvocationSpec.create(payload={})
+            },
+            python_executable=sys.executable,
+            timeout_seconds=10,
+        ),
+    )
+    graph = TaskGraph.create(
+        "Generate and run capability",
+        required_capabilities=["project.loc_report"],
+    )
+
+    result = TaskScheduler(
+        decomposer=ScriptedTaskDecomposer({}),
+        capability_resolver=registry,
+        capability_acquirer=acquirer,
+        leaf_executor=executor,
+        integration_verifier=FunctionIntegrationVerifier(),
+    ).run(graph)
+
+    assert result.root.status == TaskStatus.COMPLETED
+    assert result.root.result is not None
+    assert result.root.result.evidence["output"] == {"status": "ok"}
+    assert (generator_root / "calls.txt").read_text() == "1"
 
 
 def test_repeated_acquisition_is_idempotent(tmp_path) -> None:

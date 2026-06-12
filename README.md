@@ -151,6 +151,7 @@ state = engine.run(definition)
 - addressable evidence catalogue with strict reference validation;
 - bounded subprocess adapter to the standalone Plugin Generator;
 - persistent generated-capability registry with artifact integrity checks;
+- policy-driven bounded runtime for admitted generated plugins;
 - parent integration verification and status propagation;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
@@ -160,11 +161,15 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.11.0` connects `CapabilityAcquirer` to the standalone Plugin
-Generator through its public JSON CLI. An external allowlist maps capability
-names to plugin families. Generated bundles are admitted only after bounded
-process execution, strict path and manifest validation, and SHA-256 checks for
-all required files. Acquisition and runtime invocation remain separate
-admission stages; generated code is not automatically executed.
+Version `0.12.0` connects admitted generated capabilities to a separate bounded
+leaf executor. An external invocation policy supplies the JSON payload and
+output contract; task metadata cannot override either. The generated
+`plugin.py` runs in an isolated child Python process only after registry and
+worker SHA-256 checks, with timeout, process-tree termination, bounded output,
+and strict JSON result validation.
+
+This is process isolation, not an OS security sandbox. Generated code still
+inherits the current user's filesystem and network permissions, so every
+capability requires explicit invocation admission.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

@@ -458,9 +458,53 @@ missing capability
   -> leaf execute / block
 ```
 
-Acquisition ещё не даёт права запускать generated code. Runtime invocation
-потребует отдельного payload contract, sandbox policy, output validation и
-собственного adapter-а.
+### Generated Plugin Runtime
+
+В `0.12.0` admission и execution остаются разными полномочиями:
+
+```text
+hash-verified registry descriptor
+  -> external invocation allowlist
+  -> fixed JSON payload
+  -> isolated Python worker
+  -> bounded subprocess supervisor
+  -> strict JSON envelope
+  -> output contract validation
+  -> LeafExecutionResult
+```
+
+`PluginInvocationPolicy` определяет вне task graph:
+
+- какие generated capabilities разрешено запускать;
+- payload для каждой capability;
+- обязательные поля результата и допустимые success statuses;
+- interpreter, timeout, output limit и payload limit.
+
+`TaskNode.metadata` не может подменить payload, interpreter или process bounds.
+Один generated leaf исполняет ровно одну capability. Смешанные capability sets
+блокируются до появления отдельной composition policy.
+
+`GeneratedPluginLeafExecutor` перед каждым запуском получает descriptor только
+через `PersistentCapabilityRegistry`, поэтому stale или tampered artifact
+считается отсутствующей capability. Worker дополнительно:
+
+- запускается с `python -I`;
+- повторно проверяет SHA-256 байтов `plugin.py`;
+- компилирует и исполняет именно прочитанные проверенные байты;
+- не использует shell и не имеет stdin;
+- подавляет произвольный stdout/stderr плагина;
+- принимает и возвращает только JSON objects;
+- возвращает bounded error envelope без traceback.
+
+Timeout завершает всё дерево процессов через общий `BoundedSubprocessTool`.
+Truncated, malformed, non-object или unsuccessful output не может завершить
+leaf успешно.
+
+Это process isolation, но не полноценная security sandbox. Generated code всё
+ещё наследует файловые и сетевые права пользователя процесса. Поэтому runtime
+не запускает любую зарегистрированную capability автоматически: для неё нужна
+отдельная invocation policy. Следующий уровень изоляции потребует OS-level
+restrictions или контейнерного runner-а.
 
 ### Leaf Execution
 
@@ -574,8 +618,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Bounded runtime invocation для admitted generated plugins.
-2. Parent integration verification через bounded commands.
-3. Process registry с owner/run id и heartbeat.
-4. Parallel execution только независимых ready leaves.
+1. Parent integration verification через bounded commands.
+2. Process registry с owner/run id и heartbeat.
+3. Parallel execution только независимых ready leaves.
+4. OS-level sandbox profile для недоверенных generated plugins.
 5. Replay и сравнение decomposition strategies.
