@@ -944,6 +944,59 @@ python -m examples.plugin_sandbox_smoke
 
 12 июня 2026 года все проверки smoke завершились успешно.
 
+### Sandbox Release Gate
+
+В `0.21.0` канонический real smoke подключён к автоматическому release gate:
+
+```text
+release validation
+  -> bounded subprocess supervisor
+  -> python -m examples.plugin_sandbox_smoke
+  -> strict JSON parse
+  -> require 8/8 checks
+  -> atomic release report
+  -> passed / blocked / degraded / failed
+```
+
+Production-команда:
+
+```bash
+python -m tools.sandbox_release_gate
+```
+
+Gate не дублирует sandbox fixtures и проверки. Он запускает единственный
+канонический smoke как child process и строго интерпретирует его результат.
+Команда immutable, имеет timeout и output bounds, а lifecycle фиксируется общим
+`ProcessRegistry`.
+
+Статус `passed` возможен только когда smoke завершился с exit code `0`, status
+`completed` и все восемь checks равны `true`:
+
+- completed;
+- backend;
+- data write blocked;
+- host hidden;
+- network blocked;
+- output written;
+- read-only data unchanged;
+- output materialized.
+
+Unavailable backend с exit code `2` даёт `blocked` и запрещает release.
+Явный `--degraded-ok` предназначен только для non-production проверки: report
+получает status `degraded` и никогда не маскируется под `passed`.
+
+Fail-closed результат формируется при timeout, truncation, malformed JSON,
+отсутствующем check, неожиданном outcome или ошибке запуска executable.
+Даже launch failure создаёт атомарный versioned JSON report. Report path обязан
+оставаться внутри workspace и по умолчанию равен:
+
+```text
+build/sandbox_release_gate/report.json
+```
+
+Real strict gate 12 июня 2026 года завершился `passed`: `8/8`, backend
+`wsl_bubblewrap`, release decision `releasable=true`.
+
 ### Leaf Execution
 
 `LoopEngineLeafExecutor` строит task-specific `LoopEngine + LoopDefinition`,
@@ -1056,8 +1109,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Автоматизированная проверка sandbox backend в release gate.
-2. Явная judge policy для ranking decomposition strategies.
-3. Typed selectors для integration routes помимо exact node id.
-4. Bounded retention/pruning policy для process registry service.
-5. Cross-process resource lease backend для нескольких scheduler processes.
+1. Явная judge policy для ranking decomposition strategies.
+2. Typed selectors для integration routes помимо exact node id.
+3. Bounded retention/pruning policy для process registry service.
+4. Cross-process resource lease backend для нескольких scheduler processes.
+5. Composite release gate для pytest, wheel smoke и real sandbox.

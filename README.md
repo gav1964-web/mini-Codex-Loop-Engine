@@ -158,6 +158,7 @@ state = engine.run(definition)
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
+- strict automated release gate for the real sandbox backend;
 - bounded parent integration commands and status propagation;
 - external routing and all-of composition for parent integration checks;
 - deterministic criteria judge;
@@ -168,20 +169,23 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.20.0` adds immutable external resource claims to parallel leaf
-admission. Mutation capabilities remain sequential unless the exact node has at
-least one write claim.
+Version `0.21.0` adds a strict automated release gate for the real WSL
+bubblewrap backend. It runs the canonical eight-check isolation smoke through
+the bounded process supervisor and writes an atomic JSON report.
 
-Read claims may share a resource; any overlap involving a write claim conflicts.
-The deterministic batch selector skips conflicting leaves and can still admit a
-later leaf that targets an independent canonical workspace.
+Unavailable backends block release by default. Malformed output, missing checks,
+timeouts, truncation, nonzero outcomes, and launch failures all fail closed.
 
-Run the resource-claim example with:
+Run the production release gate with:
 
 ```bash
-python -m examples.resource_claims_demo
+python -m tools.sandbox_release_gate
 ```
 
+For explicitly non-production validation, `--degraded-ok` permits an unavailable
+backend but reports `degraded`, never `passed`.
+The resource-claim example remains available as
+`python -m examples.resource_claims_demo`.
 The process reaper example remains available as
 `python -m examples.process_reaper_service_demo`.
 The integration composition example remains available as

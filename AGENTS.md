@@ -74,6 +74,10 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Generated plugins marked as requiring an OS sandbox must fail closed when the
   configured sandbox backend is missing or unavailable; never fall back to a
   direct Python process.
+- Production release validation must run the canonical sandbox release gate in
+  strict mode and require status `passed` with every isolation check true.
+- `--degraded-ok` may be used only for explicitly non-production validation and
+  must remain visibly `degraded`, never `passed`.
 - Sandbox mounts, network isolation, executables, and trust classification must
   come from external invocation policy, never task metadata.
 

@@ -68,6 +68,7 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - deterministic parallel result application;
 - fail-closed generated plugin sandbox contract;
 - WSL bubblewrap sandbox launcher;
+- strict automated sandbox release gate;
 - explicit read-only data и writable output mounts;
 - no-fallback policy для strict plugin invocation;
 - context-bound decomposition decision replay;
@@ -267,10 +268,21 @@ mini-Codex 7, а извлекает из неё общую идею управл
 176. Claim mapping копируется и становится immutable.
 177. Прямой dataclass constructor не обходит validation.
 178. Workspace helper канонизирует эквивалентные paths.
+179. Release gate запускает canonical smoke через bounded supervisor.
+180. Status passed требует всех восьми isolation checks.
+181. Unavailable backend блокирует release по умолчанию.
+182. Explicit degraded mode никогда не возвращает passed.
+183. Missing/false check завершается fail-closed.
+184. Malformed JSON и timeout завершаются fail-closed.
+185. Output truncation и неожиданный outcome завершаются fail-closed.
+186. Launch failure создаёт structured failed report.
+187. Report path ограничен workspace и записывается атомарно.
+188. Прямой policy constructor не обходит validation.
+189. Degraded mode принимает только точную unavailable ошибку backend-а.
 
 ## Результаты проверок
 
-- `pytest`: 173 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 183 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -321,6 +333,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - resource claim + parallel scheduler targeted tests: 18 passed;
 - canonical resource claims demo: 2 independent workspace writes overlapped;
 - wheel `0.20.0` успешно собран и проверен через публичные claim exports;
+- sandbox release targeted tests: 22 passed;
+- strict `python -m tools.sandbox_release_gate`: passed, 8/8 checks;
+- wheel `0.21.0` успешно собран и проверен через release-gate contracts;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -365,14 +380,13 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.20.0` добавляет external resource claims для безопасной параллельной
-mutation. Exact node route получает immutable read/write claims, а mutation
-capability без write claim остаётся последовательной.
+Версия `0.21.0` превращает real WSL bubblewrap smoke в автоматический strict
+release gate. Gate запускает канонический smoke через bounded supervisor,
+требует все восемь isolation checks и сохраняет атомарный JSON report.
 
-Read/read совместимы, любое пересечение с write конфликтует. Batch selector
-пропускает конфликтующий leaf и продолжает искать независимый ресурс.
-Workspace helper канонизирует paths. Metadata не имеет claim authority, а
-scheduler и worker execution contracts не изменены.
+Unavailable backend блокирует production release. Explicit degraded mode
+остаётся визуально `degraded`. Timeout, truncation, malformed output, missing
+checks и launch errors завершаются fail-closed.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
