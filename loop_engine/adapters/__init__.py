@@ -9,6 +9,12 @@ from .process_registry import (
     configure_global_process_registry,
     get_global_process_registry,
 )
+from .process_reaper_service import (
+    ProcessReaperPolicy,
+    ProcessReaperReport,
+    ProcessReaperService,
+    ReaperCycleReport,
+)
 from .subprocesses import (
     BoundedSubprocessTool,
     SubprocessSpec,
@@ -29,7 +35,11 @@ __all__ = [
     "OpenAICompatibleJSONClient",
     "PlanContractError",
     "ProcessRecord",
+    "ProcessReaperPolicy",
+    "ProcessReaperReport",
+    "ProcessReaperService",
     "ProcessRegistry",
+    "ReaperCycleReport",
     "SubprocessSpec",
     "ToolRegistryExecutor",
     "ValidatedLLMPlanner",

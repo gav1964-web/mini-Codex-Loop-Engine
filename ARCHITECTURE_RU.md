@@ -174,9 +174,64 @@ heartbeat падают, процесс завершается fail-closed, а н
 5. при завершении по stale heartbeat ставит status `terminated`.
 
 Проверка identity защищает от убийства другого процесса после повторного
-использования PID операционной системой. Автоматического фонового daemon-а пока
-нет: lifecycle timeout работает внутри launcher-а, а orphan reaping должен
-вызываться явным верхнеуровневым runtime или service loop.
+использования PID операционной системой.
+
+### Bounded Process Reaper Service
+
+В `0.19.0` добавлен `ProcessReaperService`: явно запускаемый adapter поверх
+существующих `ProcessRegistry` и identity-safe reaper.
+
+```text
+host runtime
+  -> ProcessReaperPolicy
+  -> immediate stale sweep
+  -> interruptible interval wait
+  -> next sweep
+  -> max_cycles / stop_requested / error
+  -> structured ProcessReaperReport
+```
+
+`ProcessReaperPolicy` задаёт три обязательные положительные границы:
+
+- `stale_after_seconds`;
+- `interval_seconds`;
+- `max_cycles`.
+
+Сервис не создаёт скрытый daemon и не запускает собственный background thread.
+Владение thread/process lifecycle остаётся у host runtime. Для штатной остановки
+host передаёт `threading.Event`; ожидание между sweep прерывается этим event без
+ожидания полного interval.
+
+Первый sweep выполняется сразу. Каждый успешный цикл сохраняет:
+
+- номер и timestamps;
+- ids reaped records;
+- число `terminated`;
+- число `lost`.
+
+Итоговый report имеет status, stop reason, timestamps, cycles и optional error.
+Поддерживаются terminal reasons:
+
+```text
+max_cycles
+stop_requested
+error
+```
+
+Exception reaper-а и malformed result преобразуются в structured `failed`
+report. Lock освобождается и после ошибки, поэтому решение о следующем bounded
+запуске остаётся у host. Все service instances одного registry используют общий
+lease lock; одновременный второй `run()` для этого registry отклоняется.
+
+Service loop не заменяет command timeout внутри `BoundedSubprocessTool`: timeout
+владеет живым launcher lifecycle, reaper обслуживает stale records после потери
+launcher heartbeat.
+
+Канонический пример:
+
+```bash
+python -m examples.process_reaper_service_demo
+```
 
 ## Первый Coding Profile
 
@@ -947,8 +1002,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Service loop для периодического orphan reaping.
-2. Resource claims для безопасной параллельной mutation разных workspaces.
-3. Автоматизированная проверка sandbox backend в release gate.
-4. Явная judge policy для ranking decomposition strategies.
-5. Typed selectors для integration routes помимо exact node id.
+1. Resource claims для безопасной параллельной mutation разных workspaces.
+2. Автоматизированная проверка sandbox backend в release gate.
+3. Явная judge policy для ranking decomposition strategies.
+4. Typed selectors для integration routes помимо exact node id.
+5. Bounded retention/pruning policy для process registry service.

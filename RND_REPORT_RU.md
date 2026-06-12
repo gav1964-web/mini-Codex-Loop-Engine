@@ -58,6 +58,7 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - global owner/run-aware process registry;
 - periodic subprocess heartbeat и terminal outcomes;
 - identity-safe stale process reaper;
+- bounded periodic process-reaper service;
 - command digest persistence без raw argv;
 - bounded parallel execution independent ready leaves;
 - external parallel-safe capability allowlist;
@@ -245,10 +246,20 @@ mini-Codex 7, а извлекает из неё общую идею управл
 157. Unknown verifier status завершается fail-closed.
 158. Неверный тип verifier result завершается fail-closed.
 159. Созданные exact routes нельзя изменить через исходный или policy mapping.
+160. Reaper service выполняет первый stale sweep немедленно.
+161. Reaper service завершается по обязательному `max_cycles`.
+162. Stop event прерывает interval wait.
+163. Pre-requested stop не запускает sweep.
+164. Exception reaper-а становится structured failed report.
+165. Malformed reaper output завершается fail-closed.
+166. Service lock освобождается после failed run.
+167. Одновременный второй service run одного registry отклоняется.
+168. Cycle report считает terminated/lost и сохраняет record ids.
+169. Policy отклоняет неположительные stale/interval/cycle bounds.
 
 ## Результаты проверок
 
-- `pytest`: 155 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 164 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -293,6 +304,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - integration composition targeted tests: 30 passed;
 - wheel `0.18.0` успешно собран, установлен в чистый каталог и проверен через
   публичные экспорты composition contracts;
+- process reaper service targeted tests: 20 passed;
+- canonical process reaper service demo: 1 stale record terminated за 2 cycles;
+- wheel `0.19.0` успешно собран и проверен через публичные service exports;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -337,14 +351,14 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.18.0` добавляет external routing и all-of composition parent
-integration checks. Exact `node.id` route или default plan выбирает ordered
-набор named verifiers. Metadata не имеет routing authority.
+Версия `0.19.0` добавляет bounded service loop для периодического orphan
+reaping. Host явно владеет запуском и stop event, а policy ограничивает stale
+threshold, interval и максимальное число cycles.
 
-Каждая проверка получает независимый snapshot, выполняются все checks, а
-результаты агрегируются с приоритетом failed над blocked. Scheduler не изменён:
-composition полностью реализована за существующим портом
-`IntegrationVerifier`.
+Первый sweep выполняется немедленно. Каждый цикл возвращает structured counts и
+record ids. Exception и malformed output завершаются fail-closed, concurrent
+service runs одного registry отклоняются. Встроенный subprocess timeout и
+service reaping остаются разными слоями lifecycle supervision.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

@@ -17,6 +17,9 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Long-running subprocess adapters must use the bounded process-tree supervisor.
 - Every bounded subprocess must remain registered with owner/run id and heartbeat
   until it reaches a terminal process outcome.
+- Periodic orphan reaping must run through an explicitly owned bounded service
+  loop with a cycle budget and interruptible stop signal; no hidden daemon.
+- Only one reaper service run may own a registry adapter instance at a time.
 - Persistent process registries must store command digests, not raw argv that may
   contain credentials.
 - Completion requires verifier evidence and a judge decision.

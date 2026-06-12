@@ -151,6 +151,7 @@ state = engine.run(definition)
 - addressable evidence catalogue with strict reference validation;
 - bounded subprocess adapter to the standalone Plugin Generator;
 - owner/run-aware process registry with heartbeat and stale reaping;
+- bounded, interruptible service loop for periodic orphan reaping;
 - bounded parallel execution for explicitly admitted independent leaves;
 - context-bound decomposition replay and strategy comparison;
 - persistent generated-capability registry with artifact integrity checks;
@@ -166,19 +167,22 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.18.0` adds external routing and ordered all-of composition for parent
-integration checks. Exact node routes or an explicit default select a plan of
-named verifiers. Task metadata cannot override the route or plan.
+Version `0.19.0` adds an explicitly owned service loop for periodic orphan
+reaping. It performs an immediate identity-safe sweep, waits through an
+interruptible stop event, and cannot exceed its configured cycle budget.
 
-Every verifier receives an independent graph snapshot, every result is retained,
-and aggregation is fail-closed with `failed > blocked > completed`.
+Concurrent service runs on the same registry are rejected. Reaper exceptions and
+malformed results become structured failed reports, while every successful cycle
+records terminated/lost counts and reaped record ids.
 
-Run the composition example with:
+Run the service example with:
 
 ```bash
-python -m examples.integration_composition_demo
+python -m examples.process_reaper_service_demo
 ```
 
+The integration composition example remains available as
+`python -m examples.integration_composition_demo`.
 The decomposition comparison remains available as
 `python -m examples.decomposition_strategy_compare`.
 The real sandbox gate remains available as
