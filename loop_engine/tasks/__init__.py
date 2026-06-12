@@ -39,6 +39,11 @@ from .plugin_runtime import (
     PluginInvocationPolicy,
     PluginInvocationSpec,
 )
+from .plugin_sandbox import (
+    PluginSandboxLauncher,
+    SandboxMount,
+    WslBubblewrapSandbox,
+)
 from .demo import build_task_demo
 from .persistence import JsonTaskGraphStore
 from .parallel import TaskSchedulerPolicy
@@ -69,6 +74,8 @@ __all__ = [
     "PluginGeneratorAcquirer",
     "PluginInvocationPolicy",
     "PluginInvocationSpec",
+    "PluginSandboxLauncher",
+    "SandboxMount",
     "ScriptedTaskDecomposer",
     "TaskBudget",
     "TaskEvent",
@@ -78,5 +85,6 @@ __all__ = [
     "TaskSchedulerPolicy",
     "TaskStatus",
     "ValidatedLLMTaskDecomposer",
+    "WslBubblewrapSandbox",
     "build_task_demo",
 ]

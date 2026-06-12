@@ -154,6 +154,7 @@ state = engine.run(definition)
 - bounded parallel execution for explicitly admitted independent leaves;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
+- fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
 - bounded parent integration commands and status propagation;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
@@ -163,13 +164,15 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.15.0` adds opt-in bounded parallel execution for independent ready
-leaves. External scheduler policy sets the worker limit and explicitly admits
-parallel-safe capabilities. The default remains fully sequential.
+Version `0.16.0` adds a fail-closed OS sandbox contract for generated plugins.
+An invocation marked `requires_os_sandbox=True` can run only through an explicit
+sandbox launcher. Missing or unavailable backends block the leaf and never fall
+back to direct Python execution.
 
-Capability resolution, budget reservation, state transitions, events, and
-persistence stay on the scheduler thread. Workers receive independent graph
-snapshots, and results are applied in stable node-id order rather than completion
-order.
+The production Windows backend uses WSL2 and bubblewrap with separate namespaces,
+no shared network, a read-only plugin/runtime, tmpfs scratch space, and only
+explicit `/data` or `/output` mounts. WSL2 is available on the current machine,
+but bubblewrap is not installed yet, so the production probe correctly reports
+unavailable.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

@@ -12,6 +12,7 @@ from ..adapters import BoundedSubprocessTool, SubprocessSpec
 from ..models import LoopDefinition, LoopState
 from .models import LeafExecutionResult, TaskGraph, TaskNode
 from .plugin_acquisition import PersistentCapabilityRegistry
+from .plugin_sandbox import PluginSandboxLauncher
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,6 +20,7 @@ class PluginInvocationSpec:
     payload: dict[str, Any]
     required_output_fields: tuple[str, ...] = ("status",)
     success_statuses: tuple[str, ...] = ("ok", "success")
+    requires_os_sandbox: bool = False
 
     @classmethod
     def create(
@@ -27,6 +29,7 @@ class PluginInvocationSpec:
         payload: dict[str, Any] | None = None,
         required_output_fields: list[str] | tuple[str, ...] = ("status",),
         success_statuses: list[str] | tuple[str, ...] = ("ok", "success"),
+        requires_os_sandbox: bool = False,
     ) -> PluginInvocationSpec:
         fields = tuple(str(item).strip() for item in required_output_fields)
         statuses = tuple(str(item).strip() for item in success_statuses)
@@ -47,6 +50,7 @@ class PluginInvocationSpec:
             payload=normalized_payload,
             required_output_fields=fields,
             success_statuses=statuses,
+            requires_os_sandbox=bool(requires_os_sandbox),
         )
 
 
@@ -57,6 +61,7 @@ class PluginInvocationPolicy:
     timeout_seconds: float = 30.0
     max_output_bytes: int = 256 * 1024
     max_payload_bytes: int = 32 * 1024
+    sandbox_launcher: PluginSandboxLauncher | None = None
 
     @classmethod
     def create(
@@ -67,6 +72,7 @@ class PluginInvocationPolicy:
         timeout_seconds: float = 30.0,
         max_output_bytes: int = 256 * 1024,
         max_payload_bytes: int = 32 * 1024,
+        sandbox_launcher: PluginSandboxLauncher | None = None,
     ) -> PluginInvocationPolicy:
         if timeout_seconds <= 0 or max_output_bytes <= 0 or max_payload_bytes <= 0:
             raise ValueError("plugin invocation bounds must be positive")
@@ -89,6 +95,7 @@ class PluginInvocationPolicy:
             timeout_seconds=timeout_seconds,
             max_output_bytes=max_output_bytes,
             max_payload_bytes=max_payload_bytes,
+            sandbox_launcher=sandbox_launcher,
         )
 
 
@@ -127,20 +134,47 @@ class GeneratedPluginLeafExecutor:
 
         plugin_path = Path(descriptor.plugin_root) / "plugin.py"
         payload_json = _payload_json(invocation.payload)
+        sandbox_backend = "process_only"
+        if invocation.requires_os_sandbox:
+            launcher = self.policy.sandbox_launcher
+            if launcher is None:
+                return self._blocked(
+                    "generated_plugin_os_sandbox_not_configured",
+                    capabilities=capabilities,
+                    evidence={"sandbox_backend": "not_configured"},
+                )
+            if not launcher.probe(
+                Path(descriptor.plugin_root),
+                run_id=f"{graph.id}-{node.id}",
+            ):
+                return self._blocked(
+                    f"generated_plugin_os_sandbox_unavailable:{launcher.backend_name}",
+                    capabilities=capabilities,
+                    evidence={"sandbox_backend": launcher.backend_name},
+                )
+            argv = launcher.build_argv(
+                plugin_root=Path(descriptor.plugin_root),
+                worker_path=self.worker_path,
+                expected_sha256=descriptor.file_sha256["plugin.py"],
+                payload_json=payload_json,
+            )
+            sandbox_backend = launcher.backend_name
+        else:
+            argv = (
+                self.policy.python_executable,
+                "-I",
+                str(self.worker_path),
+                "--plugin",
+                str(plugin_path),
+                "--expected-sha256",
+                descriptor.file_sha256["plugin.py"],
+                "--payload-json",
+                payload_json,
+            )
         process = BoundedSubprocessTool(
             descriptor.plugin_root,
             SubprocessSpec(
-                argv=(
-                    self.policy.python_executable,
-                    "-I",
-                    str(self.worker_path),
-                    "--plugin",
-                    str(plugin_path),
-                    "--expected-sha256",
-                    descriptor.file_sha256["plugin.py"],
-                    "--payload-json",
-                    payload_json,
-                ),
+                argv=argv,
                 timeout_seconds=self.policy.timeout_seconds,
                 max_output_bytes=self.policy.max_output_bytes,
                 environment={
@@ -161,6 +195,7 @@ class GeneratedPluginLeafExecutor:
             capability=capability,
             plugin_id=descriptor.plugin_id,
             invocation=invocation,
+            sandbox_backend=sandbox_backend,
         )
 
     def _interpret(
@@ -170,11 +205,13 @@ class GeneratedPluginLeafExecutor:
         capability: str,
         plugin_id: str,
         invocation: PluginInvocationSpec,
+        sandbox_backend: str,
     ) -> LeafExecutionResult:
         base_evidence = {
             "capability": capability,
             "plugin_id": plugin_id,
             "duration_seconds": process.get("duration_seconds"),
+            "sandbox_backend": sandbox_backend,
         }
         if process.get("timed_out"):
             return self._blocked(

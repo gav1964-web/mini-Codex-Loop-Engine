@@ -56,6 +56,11 @@ This project is a universal loop engine, not a coding-agent implementation.
   directly from task metadata or generated model output.
 - Generated capabilities are available only while all admitted artifact hashes
   remain current. Acquisition does not authorize runtime invocation.
+- Generated plugins marked as requiring an OS sandbox must fail closed when the
+  configured sandbox backend is missing or unavailable; never fall back to a
+  direct Python process.
+- Sandbox mounts, network isolation, executables, and trust classification must
+  come from external invocation policy, never task metadata.
 
 ## Testing
 

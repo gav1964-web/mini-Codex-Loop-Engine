@@ -19,6 +19,38 @@ from loop_engine.tasks import (
 )
 
 
+class FakeSandbox:
+    backend_name = "fake_os_sandbox"
+
+    def __init__(self, *, available: bool = True) -> None:
+        self.available = available
+        self.probes = 0
+
+    def probe(self, workspace_root, *, run_id):
+        self.probes += 1
+        return self.available
+
+    def build_argv(
+        self,
+        *,
+        plugin_root,
+        worker_path,
+        expected_sha256,
+        payload_json,
+    ):
+        return (
+            sys.executable,
+            "-I",
+            str(worker_path),
+            "--plugin",
+            str(Path(plugin_root) / "plugin.py"),
+            "--expected-sha256",
+            expected_sha256,
+            "--payload-json",
+            payload_json,
+        )
+
+
 def _registered_plugin(
     tmp_path: Path,
     source: str,
@@ -68,6 +100,8 @@ def _executor(
     *,
     payload: dict | None = None,
     timeout_seconds: float = 5,
+    requires_os_sandbox: bool = False,
+    sandbox_launcher=None,
 ) -> GeneratedPluginLeafExecutor:
     return GeneratedPluginLeafExecutor(
         registry,
@@ -76,10 +110,12 @@ def _executor(
                 "project.loc_report": PluginInvocationSpec.create(
                     payload=payload or {"root_path": "policy-root"},
                     required_output_fields=("status", "received_root"),
+                    requires_os_sandbox=requires_os_sandbox,
                 )
             },
             python_executable=sys.executable,
             timeout_seconds=timeout_seconds,
+            sandbox_launcher=sandbox_launcher,
         ),
     )
 
@@ -129,6 +165,7 @@ def run(payload):
     assert result.root.result.summary == "report complete"
     assert result.root.result.evidence["output"]["received_root"] == "policy-root"
     assert result.root.result.evidence["plugin_id"] == "test-plugin"
+    assert result.root.result.evidence["sandbox_backend"] == "process_only"
 
 
 def test_plugin_timeout_blocks_leaf(tmp_path) -> None:
@@ -219,3 +256,82 @@ def run(payload):
     assert result.root.error == (
         "generated_plugin_invocation_not_admitted:project.loc_report"
     )
+
+
+def test_strict_plugin_without_sandbox_is_blocked(tmp_path) -> None:
+    registry = _registered_plugin(
+        tmp_path,
+        """
+def run(payload):
+    return {"status": "ok", "received_root": payload["root_path"]}
+""".strip()
+        + "\n",
+    )
+
+    result = _run(
+        registry,
+        _executor(registry, requires_os_sandbox=True),
+        metadata={"requires_os_sandbox": False},
+    )
+
+    assert result.root.status == TaskStatus.BLOCKED
+    assert result.root.error == "generated_plugin_os_sandbox_not_configured"
+    assert result.root.result.evidence["sandbox_backend"] == "not_configured"
+
+
+def test_unavailable_sandbox_does_not_fallback_to_direct_process(tmp_path) -> None:
+    registry = _registered_plugin(
+        tmp_path,
+        """
+def run(payload):
+    return {"status": "ok", "received_root": payload["root_path"]}
+""".strip()
+        + "\n",
+    )
+    sandbox = FakeSandbox(available=False)
+
+    result = _run(
+        registry,
+        _executor(
+            registry,
+            requires_os_sandbox=True,
+            sandbox_launcher=sandbox,
+        ),
+    )
+
+    assert result.root.status == TaskStatus.BLOCKED
+    assert result.root.error == (
+        "generated_plugin_os_sandbox_unavailable:fake_os_sandbox"
+    )
+    assert result.root.result.evidence["sandbox_backend"] == "fake_os_sandbox"
+    assert sandbox.probes == 1
+
+
+def test_strict_plugin_runs_only_through_configured_sandbox(tmp_path) -> None:
+    registry = _registered_plugin(
+        tmp_path,
+        """
+def run(payload):
+    return {
+        "status": "ok",
+        "received_root": payload["root_path"],
+        "summary": "sandboxed",
+    }
+""".strip()
+        + "\n",
+    )
+    sandbox = FakeSandbox()
+
+    result = _run(
+        registry,
+        _executor(
+            registry,
+            requires_os_sandbox=True,
+            sandbox_launcher=sandbox,
+        ),
+    )
+
+    assert result.root.status == TaskStatus.COMPLETED
+    assert result.root.result is not None
+    assert result.root.result.evidence["sandbox_backend"] == "fake_os_sandbox"
+    assert sandbox.probes == 1

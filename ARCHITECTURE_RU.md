@@ -636,6 +636,65 @@ leaf успешно.
 отдельная invocation policy. Следующий уровень изоляции потребует OS-level
 restrictions или контейнерного runner-а.
 
+### OS Sandbox For Generated Plugins
+
+В `0.16.0` invocation contract различает два режима:
+
+```text
+trusted admitted plugin
+  -> existing isolated Python worker
+
+requires_os_sandbox = true
+  -> configured sandbox probe
+  -> unavailable? blocked, no fallback
+  -> sandbox command
+  -> bounded process supervisor
+  -> existing worker/hash/output validation
+```
+
+Trust classification задаётся только внешним `PluginInvocationSpec`.
+`TaskNode.metadata` не может отключить sandbox, изменить backend, добавить
+mounts или включить сеть.
+
+Production backend `WslBubblewrapSandbox` предназначен для Windows + WSL2 +
+Linux `bubblewrap`. Он строит команду:
+
+- `wsl.exe --distribution <policy distro> --exec /usr/bin/bwrap`;
+- `--die-with-parent` и `--new-session`;
+- `--unshare-all`, включая отдельный network namespace;
+- `--clearenv`;
+- read-only `/usr`, `/lib`, `/lib64`;
+- отдельные `/proc`, `/dev` и tmpfs `/tmp`;
+- read-only plugin bundle в `/plugin`;
+- read-only trusted worker в `/runtime/plugin_worker.py`;
+- только явно разрешённые data/output mounts;
+- isolated Linux Python `-I`.
+
+Sandbox не видит Windows workspace целиком. `SandboxMount` допускает:
+
+- read-only mounts только под `/data/...`;
+- read-only или writable mounts под `/output/...`;
+- существующие host paths;
+- уникальные нормализованные sandbox targets.
+
+Payload должен ссылаться на sandbox paths, например `/data/project`, а не на
+Windows path. Writable доступ требует отдельного explicit mount под `/output`.
+
+Backend probe также выполняется через `BoundedSubprocessTool`, поэтому имеет
+timeout, process registry и structured terminal outcome. Если WSL, distro,
+`bwrap` или executable недоступны, strict invocation получает:
+
+```text
+generated_plugin_os_sandbox_unavailable:wsl_bubblewrap
+```
+
+и generated code не запускается. Direct-process fallback запрещён.
+
+На текущей Windows-машине 12 июня 2026 года доступны WSL2 Ubuntu 22.04 и
+`/usr/bin/python3`, но `/usr/bin/bwrap` отсутствует. Production probe возвращает
+`available=False`. Для реального sandbox smoke сначала требуется установить
+`bubblewrap` внутри этой WSL-дистрибуции. Runtime сам зависимости не ставит.
+
 ### Leaf Execution
 
 `LoopEngineLeafExecutor` строит task-specific `LoopEngine + LoopDefinition`,
@@ -748,7 +807,7 @@ Loop Engine
 
 ## Следующий этап
 
-1. OS-level sandbox profile для недоверенных generated plugins.
+1. Установить bubblewrap в WSL и выполнить real isolation smoke.
 2. Replay и сравнение decomposition strategies.
 3. Policy composition для разных типов parent integration.
 4. Service loop для периодического orphan reaping.

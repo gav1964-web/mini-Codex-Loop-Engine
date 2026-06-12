@@ -63,6 +63,10 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - external parallel-safe capability allowlist;
 - snapshot-isolated leaf workers;
 - deterministic parallel result application;
+- fail-closed generated plugin sandbox contract;
+- WSL bubblewrap sandbox launcher;
+- explicit read-only data и writable output mounts;
+- no-fallback policy для strict plugin invocation;
 - capability resolver и acquisition port;
 - `LoopEngineLeafExecutor`;
 - parent integration verification;
@@ -197,10 +201,18 @@ mini-Codex 7, а извлекает из неё общую идею управл
 121. Parallel policy требует явного safe capability allowlist.
 122. Default policy сохраняет прежний assess/execute order.
 123. Snapshot failure становится structured leaf failure.
+124. Strict plugin без sandbox configuration блокируется.
+125. Unavailable sandbox не даёт fallback в direct process.
+126. Strict plugin запускается только через configured launcher.
+127. Bubblewrap command использует unshare-all и clearenv.
+128. Plugin bundle и trusted worker монтируются read-only.
+129. Writable mounts разрешены только под `/output`.
+130. Sandbox mount targets обязаны быть уникальными.
+131. Production WSL probe фиксирует отсутствующий bubblewrap как unavailable.
 
 ## Результаты проверок
 
-- `pytest`: 127 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 134 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -233,6 +245,8 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - wheel `0.14.0` успешно собран;
 - parallel scheduler targeted tests: 21 passed;
 - wheel `0.15.0` успешно собран;
+- generated plugin sandbox targeted tests: 20 passed;
+- wheel `0.16.0` успешно собран;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -277,15 +291,15 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.15.0` добавляет bounded parallel execution независимых ready leaves.
-Параллелизм включается только внешней scheduler policy и только для capability
-sets, полностью входящих в explicit safe allowlist. Default execution остаётся
-последовательным.
+Версия `0.16.0` добавляет fail-closed OS sandbox contract для generated plugins.
+Strict invocation требует external launcher и никогда не откатывается к direct
+Python process. Production launcher строит WSL2+bubblewrap namespace с
+отключённой общей сетью, read-only plugin/runtime и explicit data/output mounts.
 
-Workers получают snapshots, а живой graph меняет только scheduler thread.
-Capability resolution, acquisition, budget reservation, events и persistence
-не выполняются конкурентно. Результаты применяются по стабильному `node.id`,
-поэтому completion timing не меняет replay sequence.
+На текущей машине WSL2 работает, но bubblewrap не установлен. Поэтому
+production probe возвращает unavailable и strict leaf блокируется до исполнения
+generated code. Command contract и no-fallback semantics покрыты тестами;
+реальный isolation smoke остаётся следующим эксплуатационным шагом.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
