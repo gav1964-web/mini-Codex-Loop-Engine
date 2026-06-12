@@ -15,6 +15,10 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Every autonomous run must have explicit budgets.
 - Tool failures must become structured `ActionResult` values.
 - Long-running subprocess adapters must use the bounded process-tree supervisor.
+- Every bounded subprocess must remain registered with owner/run id and heartbeat
+  until it reaches a terminal process outcome.
+- Persistent process registries must store command digests, not raw argv that may
+  contain credentials.
 - Completion requires verifier evidence and a judge decision.
 - Repeated observations must trigger stagnation handling.
 - Checkpoints must preserve the current loop phase and completed action index.

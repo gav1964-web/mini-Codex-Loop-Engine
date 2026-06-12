@@ -55,6 +55,10 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - strict JSON output validation generated plugins;
 - bounded command integration verifier;
 - external immutable parent verification policy;
+- global owner/run-aware process registry;
+- periodic subprocess heartbeat и terminal outcomes;
+- identity-safe stale process reaper;
+- command digest persistence без raw argv;
 - capability resolver и acquisition port;
 - `LoopEngineLeafExecutor`;
 - parent integration verification;
@@ -172,10 +176,18 @@ mini-Codex 7, а извлекает из неё общую идею управл
 104. Task metadata не может подменить integration command или bounds.
 105. Parent без admitted integration command блокируется.
 106. Integration cwd за пределами workspace отклоняется policy.
+107. Каждый bounded subprocess получает owner/run process record.
+108. Heartbeat обновляется во время выполнения процесса.
+109. Completed/failed/timed_out фиксируются как terminal outcomes.
+110. Persistent process registry переживает повторную загрузку.
+111. Stale process завершается только при совпадении PID identity.
+112. Переиспользованный или исчезнувший PID помечается lost.
+113. Raw argv и секретные аргументы не записываются в registry.
+114. Старые terminal records удаляются bounded pruning.
 
 ## Результаты проверок
 
-- `pytest`: 112 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 118 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -204,6 +216,8 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - wheel `0.12.0` успешно собран;
 - bounded parent integration targeted tests: 18 passed;
 - wheel `0.13.0` успешно собран;
+- process registry integration tests: 22 passed;
+- wheel `0.14.0` успешно собран;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -248,16 +262,16 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.13.0` добавляет bounded command verification для parent integration.
-После завершения всех детей parent проверяется immutable командой из внешней
-policy. Task metadata не может подменить workspace, argv, cwd, timeout или
-output limits. Exit code, timeout, stdout/stderr и evidence детей сохраняются
-как structured result.
+Версия `0.14.0` добавляет общий lifecycle registry для всех процессов,
+запускаемых через `BoundedSubprocessTool`. Owner определяется через
+`LoopState.run_id`; registry хранит PID identity, digest команды, heartbeat и
+terminal outcome. При отказе tracking процесс завершается fail-closed.
 
-Scheduler при этом не получил coding-specific ветвей: он по-прежнему вызывает
-порт `IntegrationVerifier`, а новый адаптер самостоятельно отвечает за process
-policy и интерпретацию результата. Это сохраняет разделение orchestration и
-verification.
+Внешний runtime может безопасно снимать orphaned процессы с просроченным
+heartbeat. Перед termination повторно проверяется identity процесса, поэтому
+переиспользованный PID не приводит к завершению чужого процесса. Persistent
+режим включается только явным storage path; default registry остаётся
+in-memory и не создаёт execution artifacts.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

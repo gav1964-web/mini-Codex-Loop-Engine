@@ -130,6 +130,54 @@ Checkpoint дополнительно хранит `next_action_index` и `itera
 На Windows дерево завершается через `taskkill /T /F`, на POSIX — через отдельную
 process session и `killpg`.
 
+## Process Registry
+
+В `0.14.0` каждый `BoundedSubprocessTool` автоматически регистрирует дочерний
+процесс в общем `ProcessRegistry`:
+
+```text
+Popen
+  -> register(owner_run_id, pid, identity, command digest)
+  -> periodic heartbeat
+  -> completed / failed / timed_out
+  -> optional terminal-record pruning
+```
+
+По умолчанию registry находится в памяти и не создаёт скрытых файлов. Для
+наблюдения между запусками ему явно передаётся JSON storage path. Формат
+versioned, запись атомарна через временный файл и `os.replace`.
+
+`ProcessRecord` содержит:
+
+- уникальный record id;
+- `owner_run_id`;
+- PID и process identity;
+- SHA-256 команды вместо raw argv;
+- cwd, timeout и hostname;
+- started/heartbeat/finished timestamps;
+- status, exit code и terminal reason.
+
+Raw argv сознательно не сохраняется: аргументы команд могут содержать токены.
+
+Supervisor обновляет heartbeat во время ожидания процесса. Если регистрация или
+heartbeat падают, процесс завершается fail-closed, а не остаётся работать без
+учёта. Обычный command timeout по-прежнему немедленно завершает process tree и
+фиксируется как `timed_out`.
+
+После аварии launcher-а другой runtime может вызвать
+`reap_stale_processes(registry, stale_after_seconds=...)`. Reaper:
+
+1. выбирает только records со статусом `running` и просроченным heartbeat;
+2. заново получает identity текущего PID;
+3. завершает process tree только при точном совпадении identity;
+4. при исчезнувшем или переиспользованном PID ставит status `lost`;
+5. при завершении по stale heartbeat ставит status `terminated`.
+
+Проверка identity защищает от убийства другого процесса после повторного
+использования PID операционной системой. Автоматического фонового daemon-а пока
+нет: lifecycle timeout работает внутри launcher-а, а orphan reaping должен
+вызываться явным верхнеуровневым runtime или service loop.
+
 ## Первый Coding Profile
 
 Профиль `coding_check` выполняет одну заранее заданную verification command.
@@ -652,8 +700,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Process registry с owner/run id и heartbeat.
-2. Parallel execution только независимых ready leaves.
-3. OS-level sandbox profile для недоверенных generated plugins.
-4. Replay и сравнение decomposition strategies.
-5. Policy composition для разных типов parent integration.
+1. Parallel execution только независимых ready leaves.
+2. OS-level sandbox profile для недоверенных generated plugins.
+3. Replay и сравнение decomposition strategies.
+4. Policy composition для разных типов parent integration.
+5. Service loop для периодического orphan reaping.

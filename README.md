@@ -150,6 +150,7 @@ state = engine.run(definition)
 - read-only evidence profile with restricted planning and criterion verification;
 - addressable evidence catalogue with strict reference validation;
 - bounded subprocess adapter to the standalone Plugin Generator;
+- owner/run-aware process registry with heartbeat and stale reaping;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - bounded parent integration commands and status propagation;
@@ -161,14 +162,14 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.13.0` adds a bounded command implementation of
-`IntegrationVerifier`. After all child nodes complete, an immutable external
-policy selects a command by parent node id or an explicit default. Task metadata
-cannot override the workspace, command, cwd, timeout, or output bounds.
+Version `0.14.0` adds a lifecycle registry around every bounded subprocess.
+Records contain owner/run id, PID identity, command digest, heartbeat, timeout,
+and terminal outcome. Raw argv is not persisted because it may contain
+credentials.
 
-Exit code `0` completes the parent, non-zero exit fails it, timeout blocks it,
-and process evidence is retained alongside all child evidence. This turns
-parent completion into an objective workspace-level check without adding
-verification logic to the scheduler.
+Normal timeout still terminates the process tree immediately. After a launcher
+crash, an explicit stale reaper can terminate an orphan only when the current
+PID identity still matches the registered process; reused or missing PIDs are
+marked lost instead.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

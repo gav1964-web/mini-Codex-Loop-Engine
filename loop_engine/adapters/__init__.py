@@ -3,7 +3,19 @@ from .evidence_verifier import EvidenceContractError, ValidatedEvidenceVerifier
 from .llm_http import LLMJSONDecodeError, OpenAICompatibleJSONClient, parse_json_object
 from .llm_planner import PlanContractError, ValidatedLLMPlanner
 from .scripted import CriteriaJudge, FunctionPlanner, FunctionVerifier
-from .subprocesses import BoundedSubprocessTool, SubprocessSpec
+from .process_registry import (
+    ProcessRecord,
+    ProcessRegistry,
+    configure_global_process_registry,
+    get_global_process_registry,
+)
+from .subprocesses import (
+    BoundedSubprocessTool,
+    SubprocessSpec,
+    lookup_process_identity,
+    reap_stale_processes,
+    terminate_process_tree,
+)
 from .tools import ToolRegistryExecutor
 
 __all__ = [
@@ -16,9 +28,16 @@ __all__ = [
     "LLMJSONDecodeError",
     "OpenAICompatibleJSONClient",
     "PlanContractError",
+    "ProcessRecord",
+    "ProcessRegistry",
     "SubprocessSpec",
     "ToolRegistryExecutor",
     "ValidatedLLMPlanner",
     "ValidatedEvidenceVerifier",
+    "configure_global_process_registry",
+    "get_global_process_registry",
+    "lookup_process_identity",
     "parse_json_object",
+    "reap_stale_processes",
+    "terminate_process_tree",
 ]
