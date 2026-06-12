@@ -151,6 +151,7 @@ state = engine.run(definition)
 - addressable evidence catalogue with strict reference validation;
 - bounded subprocess adapter to the standalone Plugin Generator;
 - owner/run-aware process registry with heartbeat and stale reaping;
+- bounded parallel execution for explicitly admitted independent leaves;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - bounded parent integration commands and status propagation;
@@ -162,14 +163,13 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.14.0` adds a lifecycle registry around every bounded subprocess.
-Records contain owner/run id, PID identity, command digest, heartbeat, timeout,
-and terminal outcome. Raw argv is not persisted because it may contain
-credentials.
+Version `0.15.0` adds opt-in bounded parallel execution for independent ready
+leaves. External scheduler policy sets the worker limit and explicitly admits
+parallel-safe capabilities. The default remains fully sequential.
 
-Normal timeout still terminates the process tree immediately. After a launcher
-crash, an explicit stale reaper can terminate an orphan only when the current
-PID identity still matches the registered process; reused or missing PIDs are
-marked lost instead.
+Capability resolution, budget reservation, state transitions, events, and
+persistence stay on the scheduler thread. Workers receive independent graph
+snapshots, and results are applied in stable node-id order rather than completion
+order.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

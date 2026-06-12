@@ -9,6 +9,12 @@ from .models import (
     TaskNode,
     TaskStatus,
 )
+from .parallel import (
+    TaskSchedulerPolicy,
+    execute_leaf_batch,
+    select_leaf_batch,
+    select_pending_candidate,
+)
 from .ports import (
     CapabilityAcquirer,
     CapabilityResolver,
@@ -29,6 +35,7 @@ class TaskScheduler:
         integration_verifier: IntegrationVerifier,
         capability_acquirer: CapabilityAcquirer | None = None,
         store: TaskGraphStore | None = None,
+        policy: TaskSchedulerPolicy | None = None,
     ) -> None:
         self.decomposer = decomposer
         self.capability_resolver = capability_resolver
@@ -36,6 +43,7 @@ class TaskScheduler:
         self.leaf_executor = leaf_executor
         self.integration_verifier = integration_verifier
         self.store = store
+        self.policy = policy or TaskSchedulerPolicy()
 
     def run(self, graph: TaskGraph) -> TaskGraph:
         self._validate_graph(graph)
@@ -59,8 +67,8 @@ class TaskScheduler:
             }:
                 break
 
-            node = self._next_node(graph)
-            if node is None:
+            candidates = self._candidate_nodes(graph)
+            if not candidates:
                 if changed:
                     continue
                 graph.root.status = TaskStatus.BLOCKED
@@ -70,10 +78,11 @@ class TaskScheduler:
                 self._save(graph)
                 break
 
-            if node.status == TaskStatus.PENDING:
-                self._assess_node(graph, node)
-            elif node.status == TaskStatus.READY:
-                self._execute_leaf(graph, node)
+            pending = select_pending_candidate(candidates, self.policy)
+            if pending is not None:
+                self._assess_node(graph, pending)
+                continue
+            self._execute_ready_leaves(graph, candidates)
 
         graph.stop_reason = graph.root.error or (
             graph.root.result.summary if graph.root.result is not None else graph.stop_reason
@@ -206,7 +215,7 @@ class TaskScheduler:
         for key in dependencies:
             visit(key)
 
-    def _execute_leaf(self, graph: TaskGraph, node: TaskNode) -> None:
+    def _prepare_leaf(self, graph: TaskGraph, node: TaskNode) -> bool:
         try:
             resolution = self.capability_resolver.resolve(node, graph)
         except Exception as exc:
@@ -214,7 +223,7 @@ class TaskScheduler:
             node.error = f"capability_resolver_error:{type(exc).__name__}:{exc}"
             record_task_event(graph, "task_blocked", node.id, {"error": node.error})
             self._save(graph)
-            return
+            return False
         missing = list(resolution.missing)
         if missing and self.capability_acquirer is not None:
             for capability in list(missing):
@@ -242,33 +251,50 @@ class TaskScheduler:
                 node.status = TaskStatus.BLOCKED
                 node.error = f"capability_resolver_error:{type(exc).__name__}:{exc}"
                 self._save(graph)
-                return
+                return False
             missing = list(resolution.missing)
         if missing:
             node.status = TaskStatus.BLOCKED
             node.error = f"missing_capabilities:{','.join(sorted(missing))}"
             record_task_event(graph, "task_blocked", node.id, {"missing": missing})
             self._save(graph)
-            return
+            return False
         if graph.leaf_executions >= graph.budget.max_leaf_executions:
             node.status = TaskStatus.BLOCKED
             node.error = "leaf_execution_budget_exhausted"
             self._save(graph)
-            return
+            return False
 
         node.status = TaskStatus.RUNNING
         node.attempts += 1
         graph.leaf_executions += 1
         record_task_event(graph, "leaf_execution_started", node.id)
         self._save(graph)
-        try:
-            result = self.leaf_executor.execute(node, graph)
-        except Exception as exc:
-            result = LeafExecutionResult(
-                status="failed",
-                summary="leaf executor raised an exception",
-                error=f"{type(exc).__name__}: {exc}",
-            )
+        return True
+
+    def _execute_ready_leaves(
+        self,
+        graph: TaskGraph,
+        candidates: list[TaskNode],
+    ) -> None:
+        selected = select_leaf_batch(candidates, self.policy)
+        prepared = [
+            node for node in selected if self._prepare_leaf(graph, node)
+        ]
+        results = execute_leaf_batch(
+            self.leaf_executor,
+            prepared,
+            graph,
+        )
+        for node in sorted(prepared, key=lambda item: item.id):
+            self._apply_leaf_result(graph, node, results[node.id])
+
+    def _apply_leaf_result(
+        self,
+        graph: TaskGraph,
+        node: TaskNode,
+        result: LeafExecutionResult,
+    ) -> None:
         node.result = result
         if result.status == "completed":
             node.status = TaskStatus.COMPLETED
@@ -340,16 +366,14 @@ class TaskScheduler:
         return changed
 
     @staticmethod
-    def _next_node(graph: TaskGraph) -> TaskNode | None:
+    def _candidate_nodes(graph: TaskGraph) -> list[TaskNode]:
         candidates = []
         for node in graph.nodes.values():
             if node.status not in {TaskStatus.PENDING, TaskStatus.READY}:
                 continue
             if all(graph.nodes[item].status == TaskStatus.COMPLETED for item in node.dependencies):
                 candidates.append(node)
-        if not candidates:
-            return None
-        return sorted(candidates, key=lambda item: (item.depth, item.id))[0]
+        return sorted(candidates, key=lambda item: (item.depth, item.id))
 
     @staticmethod
     def _validate_graph(graph: TaskGraph) -> None:

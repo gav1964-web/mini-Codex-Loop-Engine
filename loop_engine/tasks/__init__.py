@@ -41,6 +41,7 @@ from .plugin_runtime import (
 )
 from .demo import build_task_demo
 from .persistence import JsonTaskGraphStore
+from .parallel import TaskSchedulerPolicy
 from .scheduler import TaskScheduler
 
 __all__ = [
@@ -74,6 +75,7 @@ __all__ = [
     "TaskGraph",
     "TaskNode",
     "TaskScheduler",
+    "TaskSchedulerPolicy",
     "TaskStatus",
     "ValidatedLLMTaskDecomposer",
     "build_task_demo",

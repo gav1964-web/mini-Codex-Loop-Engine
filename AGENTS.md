@@ -34,6 +34,10 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Contract repair must not execute tools, alter goals, or reinterpret verification.
 - Transport failures are not contract errors and must not trigger repair prompts.
 - `TaskScheduler` is the only owner of task-node status transitions.
+- Parallel leaf execution must be explicitly bounded and limited to capabilities
+  admitted as parallel-safe by external scheduler policy.
+- Worker threads must receive task-graph snapshots; only the scheduler thread may
+  apply results, append events, or persist task graphs.
 - Task decomposition, capability resolution/acquisition, leaf execution, and
   parent integration must remain independent ports.
 - A non-atomic node must not execute directly; it must produce bounded children.

@@ -59,6 +59,10 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - periodic subprocess heartbeat и terminal outcomes;
 - identity-safe stale process reaper;
 - command digest persistence без raw argv;
+- bounded parallel execution independent ready leaves;
+- external parallel-safe capability allowlist;
+- snapshot-isolated leaf workers;
+- deterministic parallel result application;
 - capability resolver и acquisition port;
 - `LoopEngineLeafExecutor`;
 - parent integration verification;
@@ -184,10 +188,19 @@ mini-Codex 7, а извлекает из неё общую идею управл
 112. Переиспользованный или исчезнувший PID помечается lost.
 113. Raw argv и секретные аргументы не записываются в registry.
 114. Старые terminal records удаляются bounded pruning.
+115. Независимые admitted leaves выполняются с bounded parallelism.
+116. Dependency leaf не запускается до завершения predecessor.
+117. Не admitted capability остаётся последовательной.
+118. Leaf budget резервируется до запуска parallel batch.
+119. Parallel results применяются в стабильном node-id order.
+120. Worker mutation не меняет живой TaskGraph.
+121. Parallel policy требует явного safe capability allowlist.
+122. Default policy сохраняет прежний assess/execute order.
+123. Snapshot failure становится structured leaf failure.
 
 ## Результаты проверок
 
-- `pytest`: 118 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 127 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -218,6 +231,8 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - wheel `0.13.0` успешно собран;
 - process registry integration tests: 22 passed;
 - wheel `0.14.0` успешно собран;
+- parallel scheduler targeted tests: 21 passed;
+- wheel `0.15.0` успешно собран;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -262,16 +277,15 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.14.0` добавляет общий lifecycle registry для всех процессов,
-запускаемых через `BoundedSubprocessTool`. Owner определяется через
-`LoopState.run_id`; registry хранит PID identity, digest команды, heartbeat и
-terminal outcome. При отказе tracking процесс завершается fail-closed.
+Версия `0.15.0` добавляет bounded parallel execution независимых ready leaves.
+Параллелизм включается только внешней scheduler policy и только для capability
+sets, полностью входящих в explicit safe allowlist. Default execution остаётся
+последовательным.
 
-Внешний runtime может безопасно снимать orphaned процессы с просроченным
-heartbeat. Перед termination повторно проверяется identity процесса, поэтому
-переиспользованный PID не приводит к завершению чужого процесса. Persistent
-режим включается только явным storage path; default registry остаётся
-in-memory и не создаёт execution artifacts.
+Workers получают snapshots, а живой graph меняет только scheduler thread.
+Capability resolution, acquisition, budget reservation, events и persistence
+не выполняются конкурентно. Результаты применяются по стабильному `node.id`,
+поэтому completion timing не меняет replay sequence.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
