@@ -152,6 +152,7 @@ state = engine.run(definition)
 - bounded subprocess adapter to the standalone Plugin Generator;
 - owner/run-aware process registry with heartbeat and stale reaping;
 - bounded parallel execution for explicitly admitted independent leaves;
+- context-bound decomposition replay and strategy comparison;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
@@ -164,21 +165,21 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.16.1` adds a reproducible real isolation smoke for the fail-closed OS
-sandbox contract introduced in `0.16.0`.
-An invocation marked `requires_os_sandbox=True` can run only through an explicit
-sandbox launcher. Missing or unavailable backends block the leaf and never fall
-back to direct Python execution.
+Version `0.17.0` adds context-bound decomposition replay and deterministic
+strategy comparison. Recorded decisions can be replayed only when the fresh
+node context has the same SHA-256 fingerprint.
 
-The production Windows backend uses WSL2 and bubblewrap with separate namespaces,
-no shared network, a read-only plugin/runtime, tmpfs scratch space, and only
-explicit `/data` or `/output` mounts. The current machine has bubblewrap `0.6.1`
-installed in `Ubuntu-22.04`.
+Reports compare graph topology, depth, dependency edges, executions, events,
+terminal counts, and stable topology/outcome fingerprints. The replay layer
+reports divergence but deliberately does not choose a subjective winner.
 
-Run the real isolation gate with:
+Run the comparison example with:
 
 ```bash
-python -m examples.plugin_sandbox_smoke
+python -m examples.decomposition_strategy_compare
 ```
+
+The real sandbox gate remains available as
+`python -m examples.plugin_sandbox_smoke`.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

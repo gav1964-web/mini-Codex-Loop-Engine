@@ -47,6 +47,18 @@ from .plugin_sandbox import (
 from .demo import build_task_demo
 from .persistence import JsonTaskGraphStore
 from .parallel import TaskSchedulerPolicy
+from .replay import (
+    DecompositionStrategyRunner,
+    DecompositionTrace,
+    DecompositionTraceEntry,
+    RecordedTaskDecomposer,
+    RecordingTaskDecomposer,
+    ReplayTaskCase,
+    StrategyComparison,
+    StrategyMetrics,
+    decomposition_context_sha256,
+    strategy_metrics,
+)
 from .scheduler import TaskScheduler
 
 __all__ = [
@@ -59,6 +71,9 @@ __all__ = [
     "CodingLeafExecutor",
     "CodingLeafPolicy",
     "DecompositionContractError",
+    "DecompositionStrategyRunner",
+    "DecompositionTrace",
+    "DecompositionTraceEntry",
     "FunctionIntegrationVerifier",
     "FunctionLeafExecutor",
     "FunctionCapabilityAcquirer",
@@ -75,6 +90,9 @@ __all__ = [
     "PluginInvocationPolicy",
     "PluginInvocationSpec",
     "PluginSandboxLauncher",
+    "RecordedTaskDecomposer",
+    "RecordingTaskDecomposer",
+    "ReplayTaskCase",
     "SandboxMount",
     "ScriptedTaskDecomposer",
     "TaskBudget",
@@ -84,7 +102,11 @@ __all__ = [
     "TaskScheduler",
     "TaskSchedulerPolicy",
     "TaskStatus",
+    "StrategyComparison",
+    "StrategyMetrics",
     "ValidatedLLMTaskDecomposer",
     "WslBubblewrapSandbox",
     "build_task_demo",
+    "decomposition_context_sha256",
+    "strategy_metrics",
 ]

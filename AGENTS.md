@@ -38,6 +38,10 @@ This project is a universal loop engine, not a coding-agent implementation.
   admitted as parallel-safe by external scheduler policy.
 - Worker threads must receive task-graph snapshots; only the scheduler thread may
   apply results, append events, or persist task graphs.
+- Decomposition replay must bind every recorded decision to a deterministic
+  node-context fingerprint and fail on context drift.
+- Strategy comparison may report topology and outcome metrics but must not encode
+  a hidden subjective winner policy in the scheduler or replay layer.
 - Task decomposition, capability resolution/acquisition, leaf execution, and
   parent integration must remain independent ports.
 - A non-atomic node must not execute directly; it must produce bounded children.

@@ -537,6 +537,62 @@ snapshot также завершает выбранные leaves как failed, 
 `running`. Recovery сохраняет прежнюю семантику: checkpointed `running` leaves
 после перезапуска переходят в `ready`.
 
+### Decomposition Replay And Comparison
+
+В `0.17.0` добавлен отдельный experiment layer над портом `TaskDecomposer`:
+
+```text
+live/scripted decomposer
+  -> RecordingTaskDecomposer
+  -> versioned decision trace
+  -> fresh TaskGraph
+  -> RecordedTaskDecomposer
+  -> strict context replay
+```
+
+`RecordingTaskDecomposer` сохраняет уже полученный `AtomicityDecision`. Он не
+обходит deterministic validation LLM decomposer-а и не вмешивается в scheduler.
+
+Каждая trace entry содержит `node_id`, SHA-256 deterministic node context и
+serialized atomic/decompose decision. Context fingerprint включает goal,
+criteria, capabilities, dependencies, metadata, ancestors, depth, task budget,
+текущее число nodes и leaf executions.
+
+Replay разрешён только при точном совпадении context. Изменение цели, бюджета,
+порядка исполнения или структуры предков даёт
+`decomposition replay context mismatch`, а не молчаливое применение старого
+решения к новой задаче.
+
+Trace имеет `schema_version`, сохраняется атомарно и проверяет:
+
+- уникальность node ids;
+- формат context SHA-256;
+- полный decision shape;
+- непротиворечивость atomic/children/leaf.
+
+`DecompositionStrategyRunner` запускает несколько decomposer factories на
+свежих graphs одного `ReplayTaskCase`. Scheduler, capability resolver, leaf
+executor и integration verifier задаются общей factory, поэтому сравнивается
+именно decomposition strategy.
+
+Для каждого запуска считаются root status, node/leaf count, maximum depth,
+dependency edges, leaf executions, events, failed/blocked count, topology
+SHA-256 и outcome SHA-256. Fingerprints не включают timestamps и graph id.
+
+Comparison группирует стратегии по topology и outcome fingerprints и сообщает
+`topology_diverged`/`outcome_diverged`. Слой намеренно не выбирает победителя:
+стоимость, качество, latency и риск требуют отдельной явной judge policy.
+
+Канонический пример:
+
+```bash
+python -m examples.decomposition_strategy_compare
+```
+
+JSON report сохраняется в `build/decomposition_comparison.json` и остаётся
+execution artifact. Выбранный reference baseline следует переносить в
+human-maintained документ, а не коммитить как полный run output.
+
 ### Capability Acquisition
 
 ```text
@@ -828,8 +884,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Replay и сравнение decomposition strategies.
-2. Policy composition для разных типов parent integration.
-3. Service loop для периодического orphan reaping.
-4. Resource claims для безопасной параллельной mutation разных workspaces.
-5. Автоматизированная проверка sandbox backend в release gate.
+1. Policy composition для разных типов parent integration.
+2. Service loop для периодического orphan reaping.
+3. Resource claims для безопасной параллельной mutation разных workspaces.
+4. Автоматизированная проверка sandbox backend в release gate.
+5. Явная judge policy для ranking decomposition strategies.

@@ -67,6 +67,10 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - WSL bubblewrap sandbox launcher;
 - explicit read-only data и writable output mounts;
 - no-fallback policy для strict plugin invocation;
+- context-bound decomposition decision replay;
+- versioned atomic replay traces;
+- deterministic decomposition strategy metrics;
+- topology/outcome fingerprint grouping;
 - capability resolver и acquisition port;
 - `LoopEngineLeafExecutor`;
 - parent integration verification;
@@ -216,10 +220,19 @@ mini-Codex 7, а извлекает из неё общую идею управл
 136. Network connection из sandbox блокируется.
 137. Запись в explicit writable `/output` проходит.
 138. Канонический smoke runner воспроизводит весь isolation gate.
+139. Recorded decisions воспроизводятся на fresh graph.
+140. Изменённый node context блокирует replay.
+141. Отсутствующий trace node даёт structured decomposer failure.
+142. Duplicate trace nodes и invalid SHA-256 отклоняются.
+143. Strategy runner обнаруживает topology divergence.
+144. Strategy runner обнаруживает outcome divergence.
+145. Эквивалентные стратегии получают стабильные fingerprints.
+146. Comparison сохраняется как versioned JSON.
+147. Пустой набор strategies отклоняется.
 
 ## Результаты проверок
 
-- `pytest`: 134 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 143 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -257,6 +270,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - real WSL bubblewrap isolation smoke: passed;
 - canonical `python -m examples.plugin_sandbox_smoke`: 8/8 checks passed;
 - wheel `0.16.1` успешно собран;
+- canonical decomposition comparison: atomic 1 node против staged 4 nodes;
+- replay/decomposition targeted tests: 32 passed;
+- wheel `0.17.0` успешно собран;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -288,7 +304,7 @@ strategy.
 - прямые SDK конкретных LLM-провайдеров;
 - parallel actions;
 - multi-agent delegation;
-- OS-level sandbox для generated plugins;
+- automatic sandbox backend release gate;
 - расширенная coding-specific verification помимо exit code;
 - human approval gates.
 
@@ -301,14 +317,15 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.16.1` фиксирует эксплуатационную готовность WSL sandbox backend.
-`bubblewrap 0.6.1` установлен в Ubuntu-22.04, production probe возвращает
-available, а реальный strict plugin прошёл полный end-to-end runtime.
+Версия `0.17.0` добавляет decomposition replay и strategy comparison.
+Каждое записанное решение связано с deterministic context SHA-256 и не может
+быть применено после изменения задачи или graph state.
 
-Smoke подтвердил read-only data mount, запрет видимости немонтированного host
-workspace, отключённую сеть и единственную разрешённую запись в explicit
-`/output`. Сценарий запускается командой
-`python -m examples.plugin_sandbox_smoke`.
+Comparison запускает стратегии на свежих graphs одного case и считает
+структурные/terminal metrics вместе со стабильными topology/outcome
+fingerprints. Слой показывает divergence, но не содержит скрытой winner policy.
+Канонический пример сравнил atomic и staged `inspect -> apply -> verify`
+стратегии; обе завершились, но получили разные topology и outcome groups.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
