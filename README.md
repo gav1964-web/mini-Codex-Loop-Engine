@@ -157,6 +157,7 @@ state = engine.run(definition)
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
 - bounded parent integration commands and status propagation;
+- external routing and all-of composition for parent integration checks;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
 
@@ -165,20 +166,21 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.17.0` adds context-bound decomposition replay and deterministic
-strategy comparison. Recorded decisions can be replayed only when the fresh
-node context has the same SHA-256 fingerprint.
+Version `0.18.0` adds external routing and ordered all-of composition for parent
+integration checks. Exact node routes or an explicit default select a plan of
+named verifiers. Task metadata cannot override the route or plan.
 
-Reports compare graph topology, depth, dependency edges, executions, events,
-terminal counts, and stable topology/outcome fingerprints. The replay layer
-reports divergence but deliberately does not choose a subjective winner.
+Every verifier receives an independent graph snapshot, every result is retained,
+and aggregation is fail-closed with `failed > blocked > completed`.
 
-Run the comparison example with:
+Run the composition example with:
 
 ```bash
-python -m examples.decomposition_strategy_compare
+python -m examples.integration_composition_demo
 ```
 
+The decomposition comparison remains available as
+`python -m examples.decomposition_strategy_compare`.
 The real sandbox gate remains available as
 `python -m examples.plugin_sandbox_smoke`.
 

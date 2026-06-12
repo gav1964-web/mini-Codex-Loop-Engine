@@ -71,6 +71,10 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - versioned atomic replay traces;
 - deterministic decomposition strategy metrics;
 - topology/outcome fingerprint grouping;
+- external parent integration routing;
+- ordered all-of integration plans;
+- snapshot-isolated composite verifier execution;
+- fail-closed integration result aggregation;
 - capability resolver и acquisition port;
 - `LoopEngineLeafExecutor`;
 - parent integration verification;
@@ -229,10 +233,22 @@ mini-Codex 7, а извлекает из неё общую идею управл
 145. Эквивалентные стратегии получают стабильные fingerprints.
 146. Comparison сохраняется как versioned JSON.
 147. Пустой набор strategies отклоняется.
+148. Exact parent route запускает ordered all-of checks.
+149. Все integration checks выполняются даже после failed/blocked.
+150. Failed check имеет приоритет над blocked.
+151. Exact route переопределяет default plan.
+152. Task metadata не может подменить route или plan.
+153. Каждый verifier получает независимый graph snapshot.
+154. Exception verifier-а становится failed check.
+155. Missing route блокирует parent.
+156. Unknown/duplicate verifier names отклоняются policy.
+157. Unknown verifier status завершается fail-closed.
+158. Неверный тип verifier result завершается fail-closed.
+159. Созданные exact routes нельзя изменить через исходный или policy mapping.
 
 ## Результаты проверок
 
-- `pytest`: 143 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 155 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -273,6 +289,10 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - canonical decomposition comparison: atomic 1 node против staged 4 nodes;
 - replay/decomposition targeted tests: 32 passed;
 - wheel `0.17.0` успешно собран;
+- canonical integration composition demo: 2/2 required checks passed;
+- integration composition targeted tests: 30 passed;
+- wheel `0.18.0` успешно собран, установлен в чистый каталог и проверен через
+  публичные экспорты composition contracts;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -317,15 +337,14 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.17.0` добавляет decomposition replay и strategy comparison.
-Каждое записанное решение связано с deterministic context SHA-256 и не может
-быть применено после изменения задачи или graph state.
+Версия `0.18.0` добавляет external routing и all-of composition parent
+integration checks. Exact `node.id` route или default plan выбирает ordered
+набор named verifiers. Metadata не имеет routing authority.
 
-Comparison запускает стратегии на свежих graphs одного case и считает
-структурные/terminal metrics вместе со стабильными topology/outcome
-fingerprints. Слой показывает divergence, но не содержит скрытой winner policy.
-Канонический пример сравнил atomic и staged `inspect -> apply -> verify`
-стратегии; обе завершились, но получили разные topology и outcome groups.
+Каждая проверка получает независимый snapshot, выполняются все checks, а
+результаты агрегируются с приоритетом failed над blocked. Scheduler не изменён:
+composition полностью реализована за существующим портом
+`IntegrationVerifier`.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

@@ -28,6 +28,11 @@ from .integration import (
     BoundedIntegrationPolicy,
     IntegrationCommandSpec,
 )
+from .integration_composition import (
+    CompositeIntegrationVerifier,
+    IntegrationCompositionPolicy,
+    IntegrationPlan,
+)
 from .plugin_acquisition import (
     GeneratedCapability,
     PersistentCapabilityRegistry,
@@ -70,6 +75,7 @@ __all__ = [
     "ChildTaskSpec",
     "CodingLeafExecutor",
     "CodingLeafPolicy",
+    "CompositeIntegrationVerifier",
     "DecompositionContractError",
     "DecompositionStrategyRunner",
     "DecompositionTrace",
@@ -79,6 +85,8 @@ __all__ = [
     "FunctionCapabilityAcquirer",
     "InMemoryCapabilityResolver",
     "IntegrationCommandSpec",
+    "IntegrationCompositionPolicy",
+    "IntegrationPlan",
     "JsonTaskGraphStore",
     "LeafExecutionResult",
     "LoopEngineLeafExecutor",

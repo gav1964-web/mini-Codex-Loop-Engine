@@ -55,6 +55,10 @@ This project is a universal loop engine, not a coding-agent implementation.
   verifier: every criterion must appear exactly once and cite existing bounded
   evidence catalogue ids.
 - Parent completion requires completed children and an integration verifier result.
+- Composite parent integration routes and ordered check plans must come from
+  external policy, never task metadata.
+- All-of integration composition must retain every check result and fail closed
+  on exceptions or unknown verifier statuses.
 - Plugin generation belongs behind `CapabilityAcquirer`, not inside the scheduler.
 - Plugin family selection must come from external acquisition policy, never
   directly from task metadata or generated model output.
