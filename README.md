@@ -152,7 +152,7 @@ state = engine.run(definition)
 - bounded subprocess adapter to the standalone Plugin Generator;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
-- parent integration verification and status propagation;
+- bounded parent integration commands and status propagation;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
 
@@ -161,15 +161,14 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.12.0` connects admitted generated capabilities to a separate bounded
-leaf executor. An external invocation policy supplies the JSON payload and
-output contract; task metadata cannot override either. The generated
-`plugin.py` runs in an isolated child Python process only after registry and
-worker SHA-256 checks, with timeout, process-tree termination, bounded output,
-and strict JSON result validation.
+Version `0.13.0` adds a bounded command implementation of
+`IntegrationVerifier`. After all child nodes complete, an immutable external
+policy selects a command by parent node id or an explicit default. Task metadata
+cannot override the workspace, command, cwd, timeout, or output bounds.
 
-This is process isolation, not an OS security sandbox. Generated code still
-inherits the current user's filesystem and network permissions, so every
-capability requires explicit invocation admission.
+Exit code `0` completes the parent, non-zero exit fails it, timeout blocks it,
+and process evidence is retained alongside all child evidence. This turns
+parent completion into an objective workspace-level check without adding
+verification logic to the scheduler.
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.

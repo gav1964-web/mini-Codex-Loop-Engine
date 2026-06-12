@@ -23,6 +23,11 @@ from .llm_decomposer import (
     ValidatedLLMTaskDecomposer,
 )
 from .coding_leaf import CodingLeafExecutor, CodingLeafPolicy
+from .integration import (
+    BoundedCommandIntegrationVerifier,
+    BoundedIntegrationPolicy,
+    IntegrationCommandSpec,
+)
 from .plugin_acquisition import (
     GeneratedCapability,
     PersistentCapabilityRegistry,
@@ -41,6 +46,8 @@ from .scheduler import TaskScheduler
 __all__ = [
     "AtomicLeafSpec",
     "AtomicityDecision",
+    "BoundedCommandIntegrationVerifier",
+    "BoundedIntegrationPolicy",
     "CapabilityResolution",
     "ChildTaskSpec",
     "CodingLeafExecutor",
@@ -50,6 +57,7 @@ __all__ = [
     "FunctionLeafExecutor",
     "FunctionCapabilityAcquirer",
     "InMemoryCapabilityResolver",
+    "IntegrationCommandSpec",
     "JsonTaskGraphStore",
     "LeafExecutionResult",
     "LoopEngineLeafExecutor",
