@@ -209,6 +209,13 @@ mini-Codex 7, а извлекает из неё общую идею управл
 129. Writable mounts разрешены только под `/output`.
 130. Sandbox mount targets обязаны быть уникальными.
 131. Production WSL probe фиксирует отсутствующий bubblewrap как unavailable.
+132. После установки bubblewrap production probe возвращает available.
+133. Реальный strict plugin читает read-only `/data`.
+134. Реальная запись в `/data` блокируется.
+135. Немонтированный Windows workspace не виден sandbox.
+136. Network connection из sandbox блокируется.
+137. Запись в explicit writable `/output` проходит.
+138. Канонический smoke runner воспроизводит весь isolation gate.
 
 ## Результаты проверок
 
@@ -247,6 +254,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - wheel `0.15.0` успешно собран;
 - generated plugin sandbox targeted tests: 20 passed;
 - wheel `0.16.0` успешно собран;
+- real WSL bubblewrap isolation smoke: passed;
+- canonical `python -m examples.plugin_sandbox_smoke`: 8/8 checks passed;
+- wheel `0.16.1` успешно собран;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -291,15 +301,14 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.16.0` добавляет fail-closed OS sandbox contract для generated plugins.
-Strict invocation требует external launcher и никогда не откатывается к direct
-Python process. Production launcher строит WSL2+bubblewrap namespace с
-отключённой общей сетью, read-only plugin/runtime и explicit data/output mounts.
+Версия `0.16.1` фиксирует эксплуатационную готовность WSL sandbox backend.
+`bubblewrap 0.6.1` установлен в Ubuntu-22.04, production probe возвращает
+available, а реальный strict plugin прошёл полный end-to-end runtime.
 
-На текущей машине WSL2 работает, но bubblewrap не установлен. Поэтому
-production probe возвращает unavailable и strict leaf блокируется до исполнения
-generated code. Command contract и no-fallback semantics покрыты тестами;
-реальный isolation smoke остаётся следующим эксплуатационным шагом.
+Smoke подтвердил read-only data mount, запрет видимости немонтированного host
+workspace, отключённую сеть и единственную разрешённую запись в explicit
+`/output`. Сценарий запускается командой
+`python -m examples.plugin_sandbox_smoke`.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

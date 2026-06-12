@@ -690,10 +690,31 @@ generated_plugin_os_sandbox_unavailable:wsl_bubblewrap
 
 и generated code не запускается. Direct-process fallback запрещён.
 
-На текущей Windows-машине 12 июня 2026 года доступны WSL2 Ubuntu 22.04 и
-`/usr/bin/python3`, но `/usr/bin/bwrap` отсутствует. Production probe возвращает
-`available=False`. Для реального sandbox smoke сначала требуется установить
-`bubblewrap` внутри этой WSL-дистрибуции. Runtime сам зависимости не ставит.
+На текущей Windows-машине 12 июня 2026 года доступны WSL2 Ubuntu 22.04,
+`/usr/bin/python3` и установленный `bubblewrap 0.6.1`. Из-за неработающей
+исходящей сети WSL официальный Ubuntu package был скачан Windows-транспортом и
+установлен через `dpkg`; SHA-256 `.deb`:
+
+```text
+F75C835D6871D1B36370E12EE82940334B2A9F94EFC7B959B5B236447E89743D
+```
+
+Production probe возвращает `available=True`. Канонический real smoke:
+
+```bash
+python -m examples.plugin_sandbox_smoke
+```
+
+Он проверяет end-to-end:
+
+- strict invocation через `GeneratedPluginLeafExecutor`;
+- read-only чтение `/data`;
+- запрет записи в `/data`;
+- отсутствие немонтированного Windows workspace;
+- отсутствие общей сети;
+- успешную запись только в explicit `/output`.
+
+12 июня 2026 года все проверки smoke завершились успешно.
 
 ### Leaf Execution
 
@@ -807,8 +828,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Установить bubblewrap в WSL и выполнить real isolation smoke.
-2. Replay и сравнение decomposition strategies.
-3. Policy composition для разных типов parent integration.
-4. Service loop для периодического orphan reaping.
-5. Resource claims для безопасной параллельной mutation разных workspaces.
+1. Replay и сравнение decomposition strategies.
+2. Policy composition для разных типов parent integration.
+3. Service loop для периодического orphan reaping.
+4. Resource claims для безопасной параллельной mutation разных workspaces.
+5. Автоматизированная проверка sandbox backend в release gate.

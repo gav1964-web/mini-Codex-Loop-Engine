@@ -164,15 +164,21 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.16.0` adds a fail-closed OS sandbox contract for generated plugins.
+Version `0.16.1` adds a reproducible real isolation smoke for the fail-closed OS
+sandbox contract introduced in `0.16.0`.
 An invocation marked `requires_os_sandbox=True` can run only through an explicit
 sandbox launcher. Missing or unavailable backends block the leaf and never fall
 back to direct Python execution.
 
 The production Windows backend uses WSL2 and bubblewrap with separate namespaces,
 no shared network, a read-only plugin/runtime, tmpfs scratch space, and only
-explicit `/data` or `/output` mounts. WSL2 is available on the current machine,
-but bubblewrap is not installed yet, so the production probe correctly reports
-unavailable.
+explicit `/data` or `/output` mounts. The current machine has bubblewrap `0.6.1`
+installed in `Ubuntu-22.04`.
+
+Run the real isolation gate with:
+
+```bash
+python -m examples.plugin_sandbox_smoke
+```
 
 See `ARCHITECTURE_RU.md` and `RND_REPORT_RU.md`.
