@@ -755,15 +755,49 @@ Comparison группирует стратегии по topology и outcome fing
 `topology_diverged`/`outcome_diverged`. Слой намеренно не выбирает победителя:
 стоимость, качество, latency и риск требуют отдельной явной judge policy.
 
+### Decomposition Strategy Judge
+
+В `0.22.0` добавлен независимый `LexicographicStrategyJudge`:
+
+```text
+StrategyComparison
+  -> external StrategyJudgePolicy
+  -> eligibility filter
+  -> ordered objective tuple
+  -> stable lexicographic ranking
+  -> versioned StrategyRanking report
+```
+
+`StrategyJudgePolicy` явно задаёт допустимые terminal `root_status` и
+упорядоченный набор `StrategyObjective` с направлением `min` или `max`.
+Поддерживаются только уже измеренные numeric metrics: node/leaf count, max
+depth, dependency edges, leaf executions, event count, failed/blocked count.
+
+Judge не обращается к scheduler, decomposer или LLM и не запускает стратегии
+повторно. Он работает только с результатом `StrategyComparison`.
+
+Ranking является lexicographic: первый objective имеет наивысший приоритет,
+следующий используется только при равенстве предыдущих. Общий неявный weighted
+score отсутствует. Metric values и полный порядок policy сохраняются в report.
+
+Стратегии с root status вне policy остаются видимыми как `eligible=false` и
+`rank=null`. Равные objective tuples получают одинаковый rank. Имя стратегии
+используется только для стабильного порядка отображения и не разрывает tie.
+
+Judge fail-closed отклоняет пустой comparison, duplicate/empty strategy names,
+run другого case, неизвестные или повторяющиеся objectives и пустой eligibility
+set.
+
 Канонический пример:
 
 ```bash
 python -m examples.decomposition_strategy_compare
 ```
 
-JSON report сохраняется в `build/decomposition_comparison.json` и остаётся
-execution artifact. Выбранный reference baseline следует переносить в
-human-maintained документ, а не коммитить как полный run output.
+Нейтральный report сохраняется в `build/decomposition_comparison.json`, ranking
+report — в `build/decomposition_ranking.json`. Оба остаются execution artifacts.
+Выбранный reference baseline следует переносить в human-maintained документ, а
+не коммитить как полный run output.
 
 ### Capability Acquisition
 
@@ -1109,8 +1143,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Явная judge policy для ranking decomposition strategies.
-2. Typed selectors для integration routes помимо exact node id.
-3. Bounded retention/pruning policy для process registry service.
-4. Cross-process resource lease backend для нескольких scheduler processes.
-5. Composite release gate для pytest, wheel smoke и real sandbox.
+1. Typed selectors для integration routes помимо exact node id.
+2. Bounded retention/pruning policy для process registry service.
+3. Cross-process resource lease backend для нескольких scheduler processes.
+4. Composite release gate для pytest, wheel smoke и real sandbox.
+5. Measured latency/cost metrics для richer strategy judge policies.

@@ -75,6 +75,7 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - versioned atomic replay traces;
 - deterministic decomposition strategy metrics;
 - topology/outcome fingerprint grouping;
+- explicit lexicographic strategy judge policy;
 - external parent integration routing;
 - ordered all-of integration plans;
 - snapshot-isolated composite verifier execution;
@@ -279,10 +280,20 @@ mini-Codex 7, а извлекает из неё общую идею управл
 187. Report path ограничен workspace и записывается атомарно.
 188. Прямой policy constructor не обходит validation.
 189. Degraded mode принимает только точную unavailable ошибку backend-а.
+190. Judge ранжирует только по ordered external objectives.
+191. Objective поддерживает явное направление min/max.
+192. Равные objective tuples сохраняют общий rank.
+193. Ineligible root statuses остаются видимыми без rank.
+194. Eligibility set задаётся external policy.
+195. Ranking report versioned и записывается атомарно.
+196. Empty comparison и duplicate names отклоняются.
+197. Run другого case отклоняется fail-closed.
+198. Unknown/duplicate objectives отклоняются.
+199. Eligibility policy отклоняет неизвестные task statuses.
 
 ## Результаты проверок
 
-- `pytest`: 183 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 191 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -336,6 +347,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - sandbox release targeted tests: 22 passed;
 - strict `python -m tools.sandbox_release_gate`: passed, 8/8 checks;
 - wheel `0.21.0` успешно собран и проверен через release-gate contracts;
+- strategy judge + replay targeted tests: 17 passed;
+- canonical comparison demo создал neutral comparison и explicit ranking;
+- wheel `0.22.0` успешно собран и проверен через public judge exports;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -380,13 +394,13 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.21.0` превращает real WSL bubblewrap smoke в автоматический strict
-release gate. Gate запускает канонический smoke через bounded supervisor,
-требует все восемь isolation checks и сохраняет атомарный JSON report.
+Версия `0.22.0` добавляет explicit lexicographic judge policy для ranking
+decomposition strategies. Comparison остаётся нейтральным измерителем, а judge
+применяется отдельным шагом к уже полученным metrics.
 
-Unavailable backend блокирует production release. Explicit degraded mode
-остаётся визуально `degraded`. Timeout, truncation, malformed output, missing
-checks и launch errors завершаются fail-closed.
+Policy задаёт eligibility и ordered min/max objectives. Ties сохраняются,
+ineligible outcomes не скрываются, а ranking report содержит измеренные values
+и причины каждого решения.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

@@ -49,6 +49,8 @@ This project is a universal loop engine, not a coding-agent implementation.
   node-context fingerprint and fail on context drift.
 - Strategy comparison may report topology and outcome metrics but must not encode
   a hidden subjective winner policy in the scheduler or replay layer.
+- Strategy ranking must use an explicit external judge policy with ordered,
+  named objectives; ties must remain ties and ineligible outcomes unranked.
 - Task decomposition, capability resolution/acquisition, leaf execution, and
   parent integration must remain independent ports.
 - A non-atomic node must not execute directly; it must produce bounded children.

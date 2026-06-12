@@ -65,6 +65,13 @@ from .replay import (
     strategy_metrics,
 )
 from .scheduler import TaskScheduler
+from .strategy_judge import (
+    LexicographicStrategyJudge,
+    StrategyJudgePolicy,
+    StrategyObjective,
+    StrategyRank,
+    StrategyRanking,
+)
 
 __all__ = [
     "AtomicLeafSpec",
@@ -89,6 +96,7 @@ __all__ = [
     "IntegrationPlan",
     "JsonTaskGraphStore",
     "LeafExecutionResult",
+    "LexicographicStrategyJudge",
     "LoopEngineLeafExecutor",
     "GeneratedCapability",
     "GeneratedPluginLeafExecutor",
@@ -112,7 +120,11 @@ __all__ = [
     "TaskSchedulerPolicy",
     "TaskStatus",
     "StrategyComparison",
+    "StrategyJudgePolicy",
     "StrategyMetrics",
+    "StrategyObjective",
+    "StrategyRank",
+    "StrategyRanking",
     "ValidatedLLMTaskDecomposer",
     "WslBubblewrapSandbox",
     "build_task_demo",

@@ -12,9 +12,12 @@ from loop_engine.tasks import (
     FunctionIntegrationVerifier,
     FunctionLeafExecutor,
     InMemoryCapabilityResolver,
+    LexicographicStrategyJudge,
     LeafExecutionResult,
     ReplayTaskCase,
     ScriptedTaskDecomposer,
+    StrategyJudgePolicy,
+    StrategyObjective,
     TaskScheduler,
 )
 
@@ -25,6 +28,11 @@ def _parser() -> argparse.ArgumentParser:
         "--output",
         type=Path,
         default=Path("build/decomposition_comparison.json"),
+    )
+    parser.add_argument(
+        "--ranking-output",
+        type=Path,
+        default=Path("build/decomposition_ranking.json"),
     )
     return parser
 
@@ -84,7 +92,28 @@ def main() -> int:
         },
     )
     comparison.save(args.output)
-    print(json.dumps(comparison.to_dict(), ensure_ascii=False, indent=2))
+    ranking = LexicographicStrategyJudge(
+        StrategyJudgePolicy.create(
+            objectives=[
+                StrategyObjective("failed_count"),
+                StrategyObjective("blocked_count"),
+                StrategyObjective("leaf_executions"),
+                StrategyObjective("node_count"),
+                StrategyObjective("max_depth"),
+            ]
+        )
+    ).rank(comparison)
+    ranking.save(args.ranking_output)
+    print(
+        json.dumps(
+            {
+                "comparison": comparison.to_dict(),
+                "ranking": ranking.to_dict(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
 
 

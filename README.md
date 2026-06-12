@@ -155,6 +155,7 @@ state = engine.run(definition)
 - bounded parallel execution for explicitly admitted independent leaves;
 - immutable read/write resource claims for parallel workspace mutation;
 - context-bound decomposition replay and strategy comparison;
+- explicit lexicographic judge policies for decomposition strategy ranking;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
@@ -169,19 +170,22 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.21.0` adds a strict automated release gate for the real WSL
-bubblewrap backend. It runs the canonical eight-check isolation smoke through
-the bounded process supervisor and writes an atomic JSON report.
+Version `0.22.0` adds explicit lexicographic judge policies for decomposition
+strategy ranking. Comparison remains a neutral measurement layer; ranking is a
+separate operation over already measured runs.
 
-Unavailable backends block release by default. Malformed output, missing checks,
-timeouts, truncation, nonzero outcomes, and launch failures all fail closed.
+Policies declare eligible root statuses and an ordered list of named `min`/`max`
+objectives. Equal objective tuples remain tied, while ineligible outcomes remain
+visible but unranked.
 
-Run the production release gate with:
+Run comparison and ranking with:
 
 ```bash
-python -m tools.sandbox_release_gate
+python -m examples.decomposition_strategy_compare
 ```
 
+The strict production sandbox gate remains available as
+`python -m tools.sandbox_release_gate`.
 For explicitly non-production validation, `--degraded-ok` permits an unavailable
 backend but reports `degraded`, never `passed`.
 The resource-claim example remains available as
