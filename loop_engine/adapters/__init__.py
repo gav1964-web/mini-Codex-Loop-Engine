@@ -13,6 +13,7 @@ from .process_reaper_service import (
     ProcessReaperPolicy,
     ProcessReaperReport,
     ProcessReaperService,
+    ProcessRetentionPolicy,
     ReaperCycleReport,
 )
 from .subprocesses import (
@@ -38,6 +39,7 @@ __all__ = [
     "ProcessReaperPolicy",
     "ProcessReaperReport",
     "ProcessReaperService",
+    "ProcessRetentionPolicy",
     "ProcessRegistry",
     "ReaperCycleReport",
     "SubprocessSpec",

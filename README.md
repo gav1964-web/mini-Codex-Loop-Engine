@@ -152,6 +152,7 @@ state = engine.run(definition)
 - bounded subprocess adapter to the standalone Plugin Generator;
 - owner/run-aware process registry with heartbeat and stale reaping;
 - bounded, interruptible service loop for periodic orphan reaping;
+- bounded terminal-record retention and oldest-first registry pruning;
 - bounded parallel execution for explicitly admitted independent leaves;
 - immutable read/write resource claims for parallel workspace mutation;
 - context-bound decomposition replay and strategy comparison;
@@ -171,20 +172,22 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.23.0` adds typed structural selectors for reusable parent integration
-routes. Exact node routes retain priority, followed by explicitly ordered
-selector routes and then the optional default plan.
+Version `0.24.0` adds optional bounded retention to the process-reaper service.
+Retention declares terminal-record age, pruning cadence, and a maximum number
+of records removed per cycle.
 
-Selectors support node-id prefixes, depth, and required capabilities. They read
-only scheduler-owned node fields; task metadata cannot create or override a
-match.
+Pruning runs only after a successful stale-process sweep, removes oldest
+eligible terminal records first, and never touches running records. Pruning
+errors preserve sweep evidence and fail the service explicitly.
 
-Run the typed integration example with:
+Run the retention-enabled service example with:
 
 ```bash
-python -m examples.integration_composition_demo
+python -m examples.process_reaper_service_demo
 ```
 
+The typed integration example remains available as
+`python -m examples.integration_composition_demo`.
 The strategy comparison and ranking example remains available as
 `python -m examples.decomposition_strategy_compare`.
 The strict production sandbox gate remains available as

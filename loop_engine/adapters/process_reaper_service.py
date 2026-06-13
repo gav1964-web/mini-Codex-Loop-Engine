@@ -13,10 +13,38 @@ from .subprocesses import reap_stale_processes
 
 
 @dataclass(frozen=True, slots=True)
+class ProcessRetentionPolicy:
+    retain_seconds: float
+    prune_every_cycles: int = 1
+    max_pruned_per_cycle: int = 100
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.retain_seconds, (int, float))
+            or isinstance(self.retain_seconds, bool)
+            or self.retain_seconds < 0
+        ):
+            raise ValueError("retention seconds must not be negative")
+        if (
+            not isinstance(self.prune_every_cycles, int)
+            or isinstance(self.prune_every_cycles, bool)
+            or self.prune_every_cycles <= 0
+        ):
+            raise ValueError("retention prune cadence must be positive")
+        if (
+            not isinstance(self.max_pruned_per_cycle, int)
+            or isinstance(self.max_pruned_per_cycle, bool)
+            or self.max_pruned_per_cycle <= 0
+        ):
+            raise ValueError("retention prune limit must be positive")
+
+
+@dataclass(frozen=True, slots=True)
 class ProcessReaperPolicy:
     stale_after_seconds: float
     interval_seconds: float
     max_cycles: int
+    retention: ProcessRetentionPolicy | None = None
 
     def __post_init__(self) -> None:
         if self.stale_after_seconds <= 0:
@@ -25,6 +53,11 @@ class ProcessReaperPolicy:
             raise ValueError("reaper interval must be positive")
         if self.max_cycles <= 0:
             raise ValueError("reaper max_cycles must be positive")
+        if self.retention is not None and not isinstance(
+            self.retention,
+            ProcessRetentionPolicy,
+        ):
+            raise TypeError("reaper retention must be ProcessRetentionPolicy")
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +68,9 @@ class ReaperCycleReport:
     reaped_record_ids: tuple[str, ...]
     terminated_count: int
     lost_count: int
+    pruning_attempted: bool = False
+    pruned_count: int = 0
+    pruning_error: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +88,7 @@ class ProcessReaperReport:
 
 
 ReapFunction = Callable[[ProcessRegistry, float], list[ProcessRecord]]
+PruneFunction = Callable[[ProcessRegistry, float, int], int]
 _REGISTRY_LOCKS_GUARD = threading.Lock()
 _REGISTRY_LOCKS: weakref.WeakKeyDictionary[
     ProcessRegistry,
@@ -68,11 +105,13 @@ class ProcessReaperService:
         policy: ProcessReaperPolicy,
         *,
         reaper: ReapFunction | None = None,
+        pruner: PruneFunction | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
         self.registry = registry
         self.policy = policy
         self._reaper = reaper or _default_reaper
+        self._pruner = pruner or _default_pruner
         self._clock = clock
         self._run_lock = _registry_run_lock(registry)
 
@@ -115,6 +154,44 @@ class ProcessReaperService:
                         cycles=cycles,
                         error=f"{type(exc).__name__}: {exc}",
                     )
+                retention = self.policy.retention
+                if (
+                    retention is not None
+                    and cycle_number % retention.prune_every_cycles == 0
+                ):
+                    try:
+                        pruned_count = self._pruner(
+                            self.registry,
+                            retention.retain_seconds,
+                            retention.max_pruned_per_cycle,
+                        )
+                        if (
+                            not isinstance(pruned_count, int)
+                            or isinstance(pruned_count, bool)
+                            or pruned_count < 0
+                        ):
+                            raise TypeError(
+                                "process pruner must return a non-negative integer"
+                            )
+                        cycle_report = _with_pruning(
+                            cycle_report,
+                            pruned_count=pruned_count,
+                        )
+                    except Exception as exc:
+                        error = f"{type(exc).__name__}: {exc}"
+                        cycles.append(
+                            _with_pruning(
+                                cycle_report,
+                                pruning_error=error,
+                            )
+                        )
+                        return self._report(
+                            status="failed",
+                            stop_reason="error",
+                            started_at=started_at,
+                            cycles=cycles,
+                            error=f"process_retention_error:{error}",
+                        )
                 cycles.append(cycle_report)
                 if cycle_number == self.policy.max_cycles:
                     return self._report(
@@ -163,6 +240,17 @@ def _default_reaper(
     )
 
 
+def _default_pruner(
+    registry: ProcessRegistry,
+    retain_seconds: float,
+    max_records: int,
+) -> int:
+    return registry.prune_terminal(
+        retain_seconds=retain_seconds,
+        max_records=max_records,
+    )
+
+
 def _registry_run_lock(registry: ProcessRegistry) -> threading.Lock:
     with _REGISTRY_LOCKS_GUARD:
         lock = _REGISTRY_LOCKS.get(registry)
@@ -189,4 +277,23 @@ def _cycle_report(
         reaped_record_ids=tuple(record.record_id for record in records),
         terminated_count=sum(record.status == "terminated" for record in records),
         lost_count=sum(record.status == "lost" for record in records),
+    )
+
+
+def _with_pruning(
+    report: ReaperCycleReport,
+    *,
+    pruned_count: int = 0,
+    pruning_error: str | None = None,
+) -> ReaperCycleReport:
+    return ReaperCycleReport(
+        cycle=report.cycle,
+        started_at=report.started_at,
+        finished_at=report.finished_at,
+        reaped_record_ids=report.reaped_record_ids,
+        terminated_count=report.terminated_count,
+        lost_count=report.lost_count,
+        pruning_attempted=True,
+        pruned_count=pruned_count,
+        pruning_error=pruning_error,
     )

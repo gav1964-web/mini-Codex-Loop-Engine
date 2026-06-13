@@ -5,6 +5,8 @@ import sys
 import threading
 import time
 
+import pytest
+
 from loop_engine.adapters import (
     BoundedSubprocessTool,
     ProcessRegistry,
@@ -175,3 +177,50 @@ def test_old_terminal_records_can_be_pruned(tmp_path) -> None:
 
     assert removed == 1
     assert registry.get(record.record_id) is None
+
+
+def test_terminal_pruning_is_bounded_and_oldest_first(tmp_path) -> None:
+    now = [10.0]
+    registry = ProcessRegistry(clock=lambda: now[0])
+    records = []
+    for index in range(3):
+        record = registry.register(
+            owner_run_id="owner",
+            pid=100 + index,
+            process_identity=f"identity-{index}",
+            argv=("tool",),
+            cwd=str(tmp_path),
+            timeout_seconds=1,
+        )
+        registry.finish(record.record_id, status="completed", exit_code=0)
+        records.append(record)
+        now[0] += 10
+    running = registry.register(
+        owner_run_id="owner",
+        pid=999,
+        process_identity="running",
+        argv=("tool",),
+        cwd=str(tmp_path),
+        timeout_seconds=1,
+    )
+    now[0] = 100.0
+
+    removed = registry.prune_terminal(
+        retain_seconds=20,
+        max_records=2,
+    )
+
+    assert removed == 2
+    assert registry.get(records[0].record_id) is None
+    assert registry.get(records[1].record_id) is None
+    assert registry.get(records[2].record_id) is not None
+    assert registry.get(running.record_id) is not None
+
+
+@pytest.mark.parametrize("limit", [0, True])
+def test_terminal_pruning_rejects_invalid_limit(limit) -> None:
+    with pytest.raises(ValueError, match="max_records"):
+        ProcessRegistry().prune_terminal(
+            retain_seconds=10,
+            max_records=limit,
+        )

@@ -233,6 +233,49 @@ launcher heartbeat.
 python -m examples.process_reaper_service_demo
 ```
 
+### Process Registry Retention
+
+В `0.24.0` service loop получил optional `ProcessRetentionPolicy`:
+
+```text
+successful stale sweep
+  -> retention cadence due?
+  -> prune terminal records older than retain_seconds
+  -> remove at most max_pruned_per_cycle
+  -> cycle pruning evidence
+```
+
+Policy задаёт:
+
+- `retain_seconds >= 0`;
+- положительный `prune_every_cycles`;
+- положительный `max_pruned_per_cycle`.
+
+Без retention policy сервис ничего не удаляет. Pruning выполняется только после
+успешного reaping sweep и под тем же registry-level lease.
+
+`ProcessRegistry.prune_terminal()` теперь принимает optional `max_records`.
+Eligible terminal records сортируются по `finished_at`, затем `record_id`, и
+удаляются oldest-first. Running records никогда не входят в pruning set.
+Прежний вызов без `max_records` сохраняет backward-compatible поведение.
+
+Каждый `ReaperCycleReport` дополнительно содержит:
+
+- `pruning_attempted`;
+- `pruned_count`;
+- `pruning_error`.
+
+Если pruning завершился ошибкой или вернул невалидный count, service становится
+`failed`. Уже выполненный reaping не теряется: cycle report сохраняет ids
+reaped records, terminated/lost counts и отдельную pruning error.
+
+Канонический demo удаляет одну старую completed запись, сохраняет свежую
+terminated запись и выполняет два bounded cycles:
+
+```bash
+python -m examples.process_reaper_service_demo
+```
+
 ## Первый Coding Profile
 
 Профиль `coding_check` выполняет одну заранее заданную verification command.
@@ -1186,8 +1229,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Bounded retention/pruning policy для process registry service.
-2. Cross-process resource lease backend для нескольких scheduler processes.
-3. Composite release gate для pytest, wheel smoke и real sandbox.
-4. Measured latency/cost metrics для richer strategy judge policies.
-5. Compound typed selectors с явным all/any composition.
+1. Cross-process resource lease backend для нескольких scheduler processes.
+2. Composite release gate для pytest, wheel smoke и real sandbox.
+3. Measured latency/cost metrics для richer strategy judge policies.
+4. Compound typed selectors с явным all/any composition.
+5. Persistent service-run reports и operational observability.

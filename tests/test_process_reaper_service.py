@@ -8,6 +8,7 @@ from loop_engine.adapters import (
     ProcessReaperPolicy,
     ProcessReaperService,
     ProcessRegistry,
+    ProcessRetentionPolicy,
 )
 
 
@@ -186,6 +187,98 @@ def test_registry_rejects_concurrent_service_runs() -> None:
     assert not thread.is_alive()
 
 
+def test_retention_runs_on_configured_cadence_with_explicit_limit() -> None:
+    calls: list[tuple[float, int]] = []
+
+    def prune(registry, retain_seconds, max_records):
+        calls.append((retain_seconds, max_records))
+        return 2
+
+    report = ProcessReaperService(
+        ProcessRegistry(),
+        ProcessReaperPolicy(
+            stale_after_seconds=30,
+            interval_seconds=0.001,
+            max_cycles=3,
+            retention=ProcessRetentionPolicy(
+                retain_seconds=3600,
+                prune_every_cycles=2,
+                max_pruned_per_cycle=7,
+            ),
+        ),
+        reaper=lambda registry, age: [],
+        pruner=prune,
+    ).run()
+
+    assert calls == [(3600, 7)]
+    assert report.cycles[0].pruning_attempted is False
+    assert report.cycles[1].pruning_attempted is True
+    assert report.cycles[1].pruned_count == 2
+    assert report.cycles[2].pruning_attempted is False
+
+
+def test_pruning_error_preserves_completed_reaping_evidence(tmp_path) -> None:
+    registry = ProcessRegistry()
+    record = _record(registry, tmp_path)
+
+    def reap(current, stale_after):
+        return [
+            current.finish(
+                record.record_id,
+                status="terminated",
+                exit_code=None,
+                reason="stale_heartbeat",
+            )
+        ]
+
+    def broken_pruner(registry, retain_seconds, max_records):
+        raise OSError("registry persistence unavailable")
+
+    report = ProcessReaperService(
+        registry,
+        ProcessReaperPolicy(
+            stale_after_seconds=30,
+            interval_seconds=1,
+            max_cycles=2,
+            retention=ProcessRetentionPolicy(retain_seconds=60),
+        ),
+        reaper=reap,
+        pruner=broken_pruner,
+    ).run()
+
+    assert report.status == "failed"
+    assert report.stop_reason == "error"
+    assert report.reaped_count == 1
+    assert len(report.cycles) == 1
+    assert report.cycles[0].reaped_record_ids == (record.record_id,)
+    assert report.cycles[0].pruning_attempted is True
+    assert report.cycles[0].pruning_error == (
+        "OSError: registry persistence unavailable"
+    )
+    assert report.error == (
+        "process_retention_error:OSError: registry persistence unavailable"
+    )
+
+
+@pytest.mark.parametrize("invalid_result", [-1, True, "1"])
+def test_invalid_pruner_result_fails_closed(invalid_result) -> None:
+    report = ProcessReaperService(
+        ProcessRegistry(),
+        ProcessReaperPolicy(
+            stale_after_seconds=30,
+            interval_seconds=1,
+            max_cycles=1,
+            retention=ProcessRetentionPolicy(retain_seconds=60),
+        ),
+        reaper=lambda registry, age: [],
+        pruner=lambda registry, retain, limit: invalid_result,
+    ).run()
+
+    assert report.status == "failed"
+    assert "non-negative integer" in (report.error or "")
+    assert report.cycles[0].pruning_attempted is True
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
@@ -206,3 +299,55 @@ def test_registry_rejects_concurrent_service_runs() -> None:
 def test_policy_requires_positive_bounds(kwargs, message) -> None:
     with pytest.raises(ValueError, match=message):
         ProcessReaperPolicy(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        (
+            {
+                "retain_seconds": -1,
+                "prune_every_cycles": 1,
+                "max_pruned_per_cycle": 1,
+            },
+            "retention seconds",
+        ),
+        (
+            {
+                "retain_seconds": 1,
+                "prune_every_cycles": 0,
+                "max_pruned_per_cycle": 1,
+            },
+            "cadence",
+        ),
+        (
+            {
+                "retain_seconds": 1,
+                "prune_every_cycles": True,
+                "max_pruned_per_cycle": 1,
+            },
+            "cadence",
+        ),
+        (
+            {
+                "retain_seconds": 1,
+                "prune_every_cycles": 1,
+                "max_pruned_per_cycle": 0,
+            },
+            "limit",
+        ),
+    ],
+)
+def test_retention_policy_requires_bounded_values(kwargs, message) -> None:
+    with pytest.raises(ValueError, match=message):
+        ProcessRetentionPolicy(**kwargs)
+
+
+def test_reaper_policy_requires_typed_retention() -> None:
+    with pytest.raises(TypeError, match="ProcessRetentionPolicy"):
+        ProcessReaperPolicy(
+            stale_after_seconds=1,
+            interval_seconds=1,
+            max_cycles=1,
+            retention="invalid",  # type: ignore[arg-type]
+        )

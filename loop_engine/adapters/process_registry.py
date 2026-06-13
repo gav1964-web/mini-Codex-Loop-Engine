@@ -131,20 +131,36 @@ class ProcessRegistry:
             values = [record for record in values if record.status == status]
         return sorted(values, key=lambda record: (record.started_at, record.record_id))
 
-    def prune_terminal(self, *, retain_seconds: float) -> int:
+    def prune_terminal(
+        self,
+        *,
+        retain_seconds: float,
+        max_records: int | None = None,
+    ) -> int:
         if retain_seconds < 0:
             raise ValueError("retain_seconds must not be negative")
+        if max_records is not None and (
+            not isinstance(max_records, int)
+            or isinstance(max_records, bool)
+            or max_records <= 0
+        ):
+            raise ValueError("max_records must be positive")
         cutoff = self.clock() - retain_seconds
         with self._lock:
-            removable = [
-                record_id
-                for record_id, record in self._records.items()
-                if record.status != "running"
-                and record.finished_at is not None
-                and record.finished_at < cutoff
-            ]
-            for record_id in removable:
-                del self._records[record_id]
+            removable = sorted(
+                (
+                    record
+                    for record in self._records.values()
+                    if record.status != "running"
+                    and record.finished_at is not None
+                    and record.finished_at < cutoff
+                ),
+                key=lambda record: (record.finished_at, record.record_id),
+            )
+            if max_records is not None:
+                removable = removable[:max_records]
+            for record in removable:
+                del self._records[record.record_id]
             if removable:
                 self._save()
             return len(removable)

@@ -59,6 +59,7 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - periodic subprocess heartbeat и terminal outcomes;
 - identity-safe stale process reaper;
 - bounded periodic process-reaper service;
+- bounded terminal-record retention policy;
 - command digest persistence без raw argv;
 - bounded parallel execution independent ready leaves;
 - external parallel-safe capability allowlist;
@@ -302,10 +303,20 @@ mini-Codex 7, а извлекает из неё общую идею управл
 208. Duplicate selector route names отклоняются.
 209. Unknown verifier в selector plan отклоняется.
 210. Evidence сохраняет selector kind и value.
+211. Terminal pruning поддерживает explicit per-cycle limit.
+212. Terminal records удаляются oldest-first.
+213. Running records никогда не удаляются retention policy.
+214. Retention запускается только по заданной cycle cadence.
+215. Retention отключена без explicit policy.
+216. Cycle report сохраняет pruning attempt и count.
+217. Pruning error не стирает completed reaping evidence.
+218. Invalid pruner count завершается fail-closed.
+219. Retention bounds валидируются при создании policy.
+220. Reaper policy требует typed retention contract.
 
 ## Результаты проверок
 
-- `pytest`: 201 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 214 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -365,6 +376,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - typed integration selector targeted tests: 28 passed;
 - canonical integration demo выбрал plan через selector `depth=0`;
 - wheel `0.23.0` успешно собран и проверен через public selector exports;
+- process retention/reaper targeted tests: 33 passed;
+- canonical reaper demo удалил old terminal record и сохранил fresh reaped record;
+- wheel `0.24.0` успешно собран и проверен через public retention exports;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -409,12 +423,12 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.23.0` добавляет typed structural selectors для reusable parent
-integration routes. Exact routes имеют приоритет, затем применяются ordered
-selectors и optional default.
+Версия `0.24.0` добавляет optional bounded retention policy в process-reaper
+service. Policy ограничивает возраст, cadence и максимальное число удалений за
+cycle.
 
-Selectors работают по node-id prefix, depth и required capability. Metadata не
-имеет routing authority, а evidence сохраняет имя route и точный selector.
+Pruning выполняется oldest-first только для terminal records после успешного
+sweep. Ошибка pruning сохраняет reaping evidence и завершает service fail-closed.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
