@@ -156,6 +156,7 @@ state = engine.run(definition)
 - bounded parallel execution for explicitly admitted independent leaves;
 - immutable read/write resource claims for parallel workspace mutation;
 - atomic cross-process resource leases for shared scheduler resources;
+- lease heartbeat and expiry recovery for stalled scheduler ownership;
 - context-bound decomposition replay and strategy comparison;
 - explicit lexicographic judge policies for decomposition strategy ranking;
 - persistent generated-capability registry with artifact integrity checks;
@@ -174,20 +175,22 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.26.0` adds one composite release gate over three independent bounded
-stages: the full pytest suite, clean wheel build/install/import smoke, and the
-strict real sandbox gate.
+Version `0.27.0` adds heartbeat and expiry to cross-process resource leases.
+Active operations renew ownership before TTL; expired records can be reclaimed
+even when the original process is still alive.
 
-Every stage runs even when an earlier stage fails, so the atomic JSON report
-retains complete release evidence. Production status is `passed` only when all
-three stages pass. Explicit non-production sandbox degradation remains
-`degraded`, never `passed`.
+Heartbeat lifecycle is explicitly owned by the leased operation and joined
+before release. Setup or renewal failure produces a failed task result. This
+recovers stalled scheduler ownership, while dangerous side effects still need
+fencing or a cancellable supervised worker for strict overlap prevention.
 
-Run the complete gate with:
+Run the heartbeat/expiry example with:
 
 ```bash
-python -m tools.release_gate
+python -m examples.resource_leases_demo
 ```
+
+The complete production gate remains `python -m tools.release_gate`.
 
 The typed integration example remains available as
 `python -m examples.integration_composition_demo`.

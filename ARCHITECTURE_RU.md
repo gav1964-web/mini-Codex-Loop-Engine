@@ -808,9 +808,33 @@ Acquire имеет bounded timeout и polling interval. При contention schedu
 Это позволяет восстановиться после падения scheduler process и защищает от
 переиспользования PID.
 
-Граница гарантии: если scheduler-поток погиб внутри всё ещё живого процесса,
-его lease не считается orphan. Для такого случая нужен следующий слой -
-heartbeat/expiry либо отдельный scheduler process supervisor.
+В `0.27.0` registry schema v2 добавляет:
+
+- `heartbeat_at`;
+- `expires_at`;
+- policy bounds `lease_ttl_seconds` и `heartbeat_interval_seconds`;
+- typed `renew(ResourceLease)`.
+
+Heartbeat interval обязан быть строго меньше TTL. `run_leased_operation`
+запускает один явно принадлежащий операции thread после acquire и до worker
+execution. Thread периодически продлевает lease, затем останавливается и
+join-ится до release. Скрытого daemon/service lifecycle нет.
+
+Acquire удаляет запись, если PID identity изменилась либо `expires_at` уже
+прошёл. Поэтому lease зависшего scheduler thread освобождается даже при живом
+процессе. Late renew просроченной записи запрещён и не может воскресить старое
+владение.
+
+Heartbeat setup/renew failure становится
+`resource_lease_heartbeat_error` и переводит task result в `failed`. Operation
+не запускается при невалидном heartbeat contract. Если renew сломался уже во
+время worker execution, результат не может считаться успешным.
+
+Граница гарантии остаётся принципиальной: TTL не является fencing token.
+Произвольный worker, который продолжил внешний side effect после потери lease,
+невозможно безопасно остановить общим Python contract. Для строгого исключения
+overlap опасный resource adapter должен проверять fencing token либо выполнять
+worker в cancellable process supervisor.
 
 Backend включается явно через `TaskScheduler(resource_lease_manager=...)`.
 Без него поведение `0.20.0` полностью сохраняется.
@@ -1331,8 +1355,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Lease heartbeat/expiry для зависшего scheduler внутри живого процесса.
-2. Measured latency/cost metrics для richer strategy judge policies.
-3. Compound typed selectors с явным all/any composition.
-4. Persistent service-run reports и operational observability.
-5. Release-history comparison и regression trends.
+1. Measured latency/cost metrics для richer strategy judge policies.
+2. Compound typed selectors с явным all/any composition.
+3. Persistent service-run reports и operational observability.
+4. Release-history comparison и regression trends.
+5. Optional fencing tokens для опасных resource adapters.

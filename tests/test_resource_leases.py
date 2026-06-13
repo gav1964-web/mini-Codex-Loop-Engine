@@ -35,6 +35,8 @@ def _manager(path, *, pid=100, identities=None, timeout=0.02):
             acquire_timeout_seconds=timeout,
             poll_interval_seconds=0.001,
             stale_lock_seconds=1,
+            lease_ttl_seconds=2,
+            heartbeat_interval_seconds=0.5,
         ),
         pid=pid,
         identity_lookup=identities.get,
@@ -263,6 +265,11 @@ def test_scheduler_releases_lease_after_executor_failure(tmp_path) -> None:
 def test_policy_and_registry_contracts_fail_closed(tmp_path) -> None:
     with pytest.raises(ValueError, match="bounds must be positive"):
         FileResourceLeasePolicy(acquire_timeout_seconds=0)
+    with pytest.raises(ValueError, match="less than TTL"):
+        FileResourceLeasePolicy(
+            lease_ttl_seconds=1,
+            heartbeat_interval_seconds=1,
+        )
     with pytest.raises(RuntimeError, match="identity is unavailable"):
         _manager(tmp_path / "leases.json", identities={})
 

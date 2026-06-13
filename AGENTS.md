@@ -51,6 +51,12 @@ This project is a universal loop engine, not a coding-agent implementation.
   share an explicit cross-process lease backend.
 - Resource leases must acquire the full batch atomically before leaf attempts
   or execution budget are consumed, and must be released after every outcome.
+- Active resource leases must be renewed by an explicitly owned heartbeat with
+  a bounded interval shorter than the lease TTL.
+- Expired leases may be reclaimed even while the owner process is alive; late
+  renewal must never resurrect an expired lease.
+- Heartbeat setup or renewal failure must fail the leased task outcome and stop
+  the heartbeat before release.
 - Lease contention and registry failures must become structured task outcomes;
   workers must never own lease acquisition or task status transitions.
 - Worker threads must receive task-graph snapshots; only the scheduler thread may

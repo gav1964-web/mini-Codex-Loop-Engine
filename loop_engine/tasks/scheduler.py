@@ -267,19 +267,20 @@ class TaskScheduler:
             operation=execute,
         )
         if not outcome.executed:
-            error = outcome.acquisition_error or (
+            error = outcome.acquisition_error or outcome.heartbeat_error or (
                 "resource_lease_unavailable:"
                 + (",".join(outcome.conflicting_resources) or "unknown")
             )
             self._block_for_resource_lease(graph, admitted, error)
             return
         results = outcome.value
-        if outcome.release_error is not None:
+        lease_error = outcome.heartbeat_error or outcome.release_error
+        if lease_error is not None:
             results = {
                 node.id: LeafExecutionResult(
                     status="failed",
-                    summary="resource lease release failed",
-                    error=outcome.release_error,
+                    summary="resource lease lifecycle failed",
+                    error=lease_error,
                 )
                 for node in prepared
             }

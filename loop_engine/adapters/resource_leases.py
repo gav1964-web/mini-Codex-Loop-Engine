@@ -19,7 +19,7 @@ from loop_engine.tasks.resource_leases import (
 
 from .subprocesses import lookup_process_identity
 
-RESOURCE_LEASE_SCHEMA_VERSION = 1
+RESOURCE_LEASE_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,14 +27,22 @@ class FileResourceLeasePolicy:
     acquire_timeout_seconds: float = 1.0
     poll_interval_seconds: float = 0.02
     stale_lock_seconds: float = 30.0
+    lease_ttl_seconds: float = 30.0
+    heartbeat_interval_seconds: float = 5.0
 
     def __post_init__(self) -> None:
         if (
             self.acquire_timeout_seconds <= 0
             or self.poll_interval_seconds <= 0
             or self.stale_lock_seconds <= 0
+            or self.lease_ttl_seconds <= 0
+            or self.heartbeat_interval_seconds <= 0
         ):
             raise ValueError("resource lease policy bounds must be positive")
+        if self.heartbeat_interval_seconds >= self.lease_ttl_seconds:
+            raise ValueError(
+                "resource lease heartbeat interval must be less than TTL"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +53,8 @@ class _LeaseRecord:
     process_identity: str
     claims: tuple[ResourceClaim, ...]
     acquired_at: float
+    heartbeat_at: float
+    expires_at: float
 
 
 class FileResourceLeaseManager:
@@ -74,6 +84,10 @@ class FileResourceLeaseManager:
             f".{self.storage_path.name}.lock"
         )
 
+    @property
+    def heartbeat_interval_seconds(self) -> float:
+        return self.policy.heartbeat_interval_seconds
+
     def acquire(
         self,
         *,
@@ -84,16 +98,18 @@ class FileResourceLeaseManager:
         if not owner:
             raise ValueError("resource lease owner_id is required")
         normalized = _normalize_claims(claims)
+        now = self.clock()
         if not normalized:
             return ResourceLeaseAttempt(
                 lease=ResourceLease(
                     lease_id=uuid4().hex,
                     owner_id=owner,
                     claims=(),
+                    expires_at=now + self.policy.lease_ttl_seconds,
                 )
             )
 
-        deadline = self.clock() + self.policy.acquire_timeout_seconds
+        deadline = now + self.policy.acquire_timeout_seconds
         while True:
             with self._registry_lock(deadline):
                 records = self._load()
@@ -104,6 +120,7 @@ class FileResourceLeaseManager:
                         lease_id=uuid4().hex,
                         owner_id=owner,
                         claims=normalized,
+                        expires_at=self.clock() + self.policy.lease_ttl_seconds,
                     )
                     live.append(
                         _LeaseRecord(
@@ -113,6 +130,8 @@ class FileResourceLeaseManager:
                             process_identity=self.process_identity,
                             claims=normalized,
                             acquired_at=self.clock(),
+                            heartbeat_at=self.clock(),
+                            expires_at=lease.expires_at,
                         )
                     )
                     self._save(live)
@@ -131,24 +150,53 @@ class FileResourceLeaseManager:
                 )
             )
 
-    def release(self, lease: ResourceLease) -> None:
-        if not isinstance(lease, ResourceLease):
-            raise TypeError("resource lease contract is required")
+    def renew(self, lease: ResourceLease) -> ResourceLease:
+        self._validate_lease(lease)
         deadline = self.clock() + self.policy.acquire_timeout_seconds
         with self._registry_lock(deadline):
             records = self._load()
-            match = next(
-                (record for record in records if record.lease_id == lease.lease_id),
-                None,
+            now = self.clock()
+            match = self._owned_record(
+                records,
+                lease,
+                require_live_at=now,
             )
-            if match is None:
+            renewed = ResourceLease(
+                lease_id=lease.lease_id,
+                owner_id=lease.owner_id,
+                claims=lease.claims,
+                expires_at=now + self.policy.lease_ttl_seconds,
+            )
+            self._save(
+                [
+                    (
+                        _LeaseRecord(
+                            lease_id=record.lease_id,
+                            owner_id=record.owner_id,
+                            owner_pid=record.owner_pid,
+                            process_identity=record.process_identity,
+                            claims=record.claims,
+                            acquired_at=record.acquired_at,
+                            heartbeat_at=now,
+                            expires_at=renewed.expires_at,
+                        )
+                        if record.lease_id == match.lease_id
+                        else record
+                    )
+                    for record in records
+                ]
+            )
+            return renewed
+
+    def release(self, lease: ResourceLease) -> None:
+        self._validate_lease(lease)
+        deadline = self.clock() + self.policy.acquire_timeout_seconds
+        with self._registry_lock(deadline):
+            records = self._load()
+            try:
+                self._owned_record(records, lease)
+            except KeyError:
                 return
-            if (
-                match.owner_id != lease.owner_id
-                or match.owner_pid != self.pid
-                or match.process_identity != self.process_identity
-            ):
-                raise ValueError("resource lease is not owned by this manager")
             self._save(
                 [
                     record
@@ -158,11 +206,42 @@ class FileResourceLeaseManager:
             )
 
     def _live_records(self, records: list[_LeaseRecord]) -> list[_LeaseRecord]:
+        now = self.clock()
         return [
             record
             for record in records
+            if record.expires_at > now
             if self.identity_lookup(record.owner_pid) == record.process_identity
         ]
+
+    def _owned_record(
+        self,
+        records: list[_LeaseRecord],
+        lease: ResourceLease,
+        *,
+        require_live_at: float | None = None,
+    ) -> _LeaseRecord:
+        match = next(
+            (record for record in records if record.lease_id == lease.lease_id),
+            None,
+        )
+        if match is None:
+            raise KeyError(f"resource lease no longer exists: {lease.lease_id}")
+        if (
+            match.owner_id != lease.owner_id
+            or match.owner_pid != self.pid
+            or match.process_identity != self.process_identity
+            or match.claims != lease.claims
+        ):
+            raise ValueError("resource lease is not owned by this manager")
+        if require_live_at is not None and match.expires_at <= require_live_at:
+            raise RuntimeError("resource lease already expired")
+        return match
+
+    @staticmethod
+    def _validate_lease(lease: ResourceLease) -> None:
+        if not isinstance(lease, ResourceLease):
+            raise TypeError("resource lease contract is required")
 
     def _load(self) -> list[_LeaseRecord]:
         if not self.storage_path.exists():
