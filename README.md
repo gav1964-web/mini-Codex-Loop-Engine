@@ -168,6 +168,7 @@ state = engine.run(definition)
 - bounded parent integration commands and status propagation;
 - external routing and all-of composition for parent integration checks;
 - typed structural selectors for reusable parent integration routes;
+- bounded compound `all`/`any` expressions for typed integration selectors;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
 
@@ -176,18 +177,20 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.28.0` adds measured strategy latency plus provider-neutral token and
-cost evidence. The runner owns monotonic timing; usage comes only from an
-explicit typed provider.
+Version `0.29.0` adds bounded compound expressions for typed integration
+selectors. `IntegrationSelectorGroup.all_of(...)` and `.any_of(...)` can be
+nested while retaining exact route, ordered first-match selector, and default
+plan precedence.
 
-Judge policies can now use `elapsed_ms`, token counters, or
-`cost_microunits`. Missing measurements and mixed cost bases fail closed.
-Topology and outcome fingerprints remain stable and exclude timing/cost data.
+Groups are immutable, reject empty or invalid children, and are limited to four
+group levels and sixteen total selector nodes. Matching still reads only
+admitted structural node fields; metadata remains outside routing authority.
+Evidence records the complete normalized selector expression.
 
-Run the measured comparison with:
+Run the compound integration example with:
 
 ```bash
-python -m examples.decomposition_strategy_compare
+python -m examples.integration_composition_demo
 ```
 
 The complete production gate remains `python -m tools.release_gate`.

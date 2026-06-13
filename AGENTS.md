@@ -90,6 +90,8 @@ This project is a universal loop engine, not a coding-agent implementation.
   external policy, never task metadata.
 - Typed integration selectors may inspect only admitted structural node fields;
   exact routes override ordered selectors, which override the default plan.
+- Compound integration selectors may use only bounded explicit `all`/`any`
+  groups; selector depth and node count must remain validated and finite.
 - All-of integration composition must retain every check result and fail closed
   on exceptions or unknown verifier statuses.
 - Plugin generation belongs behind `CapabilityAcquirer`, not inside the scheduler.

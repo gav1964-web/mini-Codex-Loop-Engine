@@ -497,6 +497,18 @@ lease, требует отдельного fencing token или cancellable proc
 использовать их как explicit objectives и fail-closed отклоняет missing evidence
 или несовместимые cost bases.
 
+Версия `0.29.0` добавляет compound typed selectors с bounded `all`/`any`
+composition. Selector algebra отделена от integration verifier composition,
+группы immutable и ограничены по глубине и общему числу узлов.
+
+Route precedence не изменился: exact, ordered first-match selectors, default.
+Metadata не получила routing authority, а evidence сохраняет нормализованное
+дерево выбранного selector expression.
+
+Полная регрессия также выявила Windows timing race в stale directory-lock
+fallback: mtime каталога теперь фиксируется до чтения отсутствующего
+`created_at`, поэтому recovery не зависит от побочных filesystem lookup.
+
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
 использовать idempotency key.

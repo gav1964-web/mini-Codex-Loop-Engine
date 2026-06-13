@@ -9,6 +9,11 @@ from typing import Any, Mapping
 
 from .models import LeafExecutionResult, TaskGraph, TaskNode, TaskStatus
 from .ports import IntegrationVerifier
+from .integration_selectors import (
+    IntegrationSelector,
+    IntegrationSelectorExpression,
+    IntegrationSelectorGroup,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,57 +34,9 @@ class IntegrationPlan:
 
 
 @dataclass(frozen=True, slots=True)
-class IntegrationSelector:
-    kind: str
-    value: str | int
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.kind, str):
-            raise TypeError("integration selector kind must be a string")
-        kind = self.kind.strip()
-        if kind not in {
-            "node_id_prefix",
-            "depth",
-            "required_capability",
-        }:
-            raise ValueError(f"unsupported integration selector kind: {kind}")
-        value: str | int = self.value
-        if kind == "depth":
-            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-                raise ValueError("integration depth selector must be non-negative")
-        else:
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError("integration selector string value is required")
-            value = value.strip()
-        object.__setattr__(self, "kind", kind)
-        object.__setattr__(self, "value", value)
-
-    @classmethod
-    def node_id_prefix(cls, prefix: str) -> IntegrationSelector:
-        return cls(kind="node_id_prefix", value=prefix)
-
-    @classmethod
-    def depth(cls, depth: int) -> IntegrationSelector:
-        return cls(kind="depth", value=depth)
-
-    @classmethod
-    def required_capability(cls, capability: str) -> IntegrationSelector:
-        return cls(kind="required_capability", value=capability)
-
-    def matches(self, node: TaskNode) -> bool:
-        if self.kind == "node_id_prefix":
-            return node.id.startswith(str(self.value))
-        if self.kind == "depth":
-            return node.depth == self.value
-        if self.kind == "required_capability":
-            return self.value in node.required_capabilities
-        raise AssertionError(f"unhandled integration selector kind: {self.kind}")
-
-
-@dataclass(frozen=True, slots=True)
 class IntegrationRoute:
     name: str
-    selector: IntegrationSelector
+    selector: IntegrationSelectorExpression
     plan: IntegrationPlan
 
     def __post_init__(self) -> None:
@@ -88,8 +45,13 @@ class IntegrationRoute:
         name = self.name.strip()
         if not name:
             raise ValueError("integration selector route name is required")
-        if not isinstance(self.selector, IntegrationSelector):
-            raise TypeError("integration route selector must be IntegrationSelector")
+        if not isinstance(
+            self.selector,
+            (IntegrationSelector, IntegrationSelectorGroup),
+        ):
+            raise TypeError(
+                "integration route selector must be a typed selector"
+            )
         if not isinstance(self.plan, IntegrationPlan):
             raise TypeError("integration route plan must be IntegrationPlan")
         object.__setattr__(self, "name", name)
@@ -148,7 +110,7 @@ class IntegrationCompositionPolicy:
     def resolve(
         self,
         node: TaskNode,
-    ) -> tuple[str, IntegrationPlan, IntegrationSelector | None] | None:
+    ) -> tuple[str, IntegrationPlan, IntegrationSelectorExpression | None] | None:
         exact = self.routes.get(node.id)
         if exact is not None:
             return node.id, exact, None
@@ -252,9 +214,7 @@ class CompositeIntegrationVerifier:
             **_child_evidence(node, graph),
             "integration_route": route_name,
             "integration_selector": (
-                {"kind": selector.kind, "value": selector.value}
-                if selector is not None
-                else None
+                selector.to_dict() if selector is not None else None
             ),
             "integration_plan": list(plan.verifier_names),
             "integration_checks": checks,

@@ -9,6 +9,7 @@ from loop_engine.tasks import (
     IntegrationPlan,
     IntegrationRoute,
     IntegrationSelector,
+    IntegrationSelectorGroup,
     LeafExecutionResult,
     TaskGraph,
     TaskNode,
@@ -165,6 +166,90 @@ def test_default_plan_is_used_after_selector_miss() -> None:
     assert result.evidence["integration_plan"] == ["default"]
 
 
+def test_all_group_requires_every_structural_selector() -> None:
+    selector = IntegrationSelectorGroup.all_of(
+        [
+            IntegrationSelector.node_id_prefix("root.feature"),
+            IntegrationSelector.depth(1),
+            IntegrationSelector.required_capability("integration.deep"),
+        ]
+    )
+
+    matching, _ = _completed_parent(
+        node_id="root.feature.api",
+        depth=1,
+        capabilities=["integration.deep"],
+    )
+    missing_capability, _ = _completed_parent(
+        node_id="root.feature.api",
+        depth=1,
+    )
+
+    assert selector.matches(matching) is True
+    assert selector.matches(missing_capability) is False
+
+
+def test_nested_any_group_matches_either_admitted_branch() -> None:
+    selector = IntegrationSelectorGroup.all_of(
+        [
+            IntegrationSelector.depth(1),
+            IntegrationSelectorGroup.any_of(
+                [
+                    IntegrationSelector.node_id_prefix("root.api"),
+                    IntegrationSelector.required_capability("integration.deep"),
+                ]
+            ),
+        ]
+    )
+
+    prefix_node, _ = _completed_parent(node_id="root.api.users")
+    capability_node, _ = _completed_parent(
+        node_id="root.worker",
+        capabilities=["integration.deep"],
+    )
+    miss, _ = _completed_parent(node_id="root.worker")
+
+    assert selector.matches(prefix_node) is True
+    assert selector.matches(capability_node) is True
+    assert selector.matches(miss) is False
+
+
+def test_compound_selector_route_preserves_first_match_and_evidence() -> None:
+    parent, graph = _completed_parent(capabilities=["integration.deep"])
+    compound = IntegrationSelectorGroup.all_of(
+        [
+            IntegrationSelector.depth(1),
+            IntegrationSelector.required_capability("integration.deep"),
+        ]
+    )
+    policy = IntegrationCompositionPolicy.create(
+        selector_routes=[
+            IntegrationRoute(
+                "compound",
+                compound,
+                IntegrationPlan.create(["capability"]),
+            ),
+            IntegrationRoute(
+                "fallback-prefix",
+                IntegrationSelector.node_id_prefix("root."),
+                IntegrationPlan.create(["prefix"]),
+            ),
+        ]
+    )
+
+    result = _verifier(policy).verify(parent, graph)
+
+    assert result.evidence["integration_route"] == "selector:compound"
+    assert result.evidence["integration_plan"] == ["capability"]
+    assert result.evidence["integration_selector"] == {
+        "operator": "all",
+        "selectors": [
+            {"kind": "depth", "value": 1},
+            {"kind": "required_capability", "value": "integration.deep"},
+        ],
+    }
+
+
 def test_metadata_cannot_create_or_override_selector_match() -> None:
     parent, graph = _completed_parent(
         metadata={
@@ -206,6 +291,18 @@ def test_selector_routes_are_immutable_and_copy_input() -> None:
         policy.selector_routes.append(source)  # type: ignore[attr-defined]
 
 
+def test_selector_group_copies_input_and_is_immutable() -> None:
+    source = [IntegrationSelector.depth(1)]
+    selector = IntegrationSelectorGroup.any_of(source)
+    source.clear()
+
+    assert selector.selectors == (IntegrationSelector.depth(1),)
+    with pytest.raises(AttributeError):
+        selector.selectors.append(  # type: ignore[attr-defined]
+            IntegrationSelector.depth(2)
+        )
+
+
 def test_selector_and_route_validation_fail_closed() -> None:
     with pytest.raises(ValueError, match="unsupported"):
         IntegrationSelector("metadata", "kind")
@@ -218,7 +315,7 @@ def test_selector_and_route_validation_fail_closed() -> None:
             IntegrationPlan.create(["depth"]),
         )
         IntegrationCompositionPolicy.create(selector_routes=[route, route])
-    with pytest.raises(TypeError, match="IntegrationSelector"):
+    with pytest.raises(TypeError, match="typed selector"):
         IntegrationRoute(
             "invalid",
             "depth:1",  # type: ignore[arg-type]
@@ -226,6 +323,25 @@ def test_selector_and_route_validation_fail_closed() -> None:
         )
     with pytest.raises(TypeError, match="kind must be a string"):
         IntegrationSelector(1, "value")  # type: ignore[arg-type]
+
+
+def test_selector_group_validation_and_bounds_fail_closed() -> None:
+    with pytest.raises(ValueError, match="unsupported"):
+        IntegrationSelectorGroup("not", (IntegrationSelector.depth(1),))
+    with pytest.raises(ValueError, match="non-empty"):
+        IntegrationSelectorGroup.all_of([])
+    with pytest.raises(TypeError, match="typed selectors"):
+        IntegrationSelectorGroup.any_of(["depth:1"])  # type: ignore[list-item]
+
+    selector = IntegrationSelector.depth(1)
+    with pytest.raises(ValueError, match="maximum depth"):
+        for _ in range(5):
+            selector = IntegrationSelectorGroup.all_of([selector])
+
+    with pytest.raises(ValueError, match="maximum node count"):
+        IntegrationSelectorGroup.any_of(
+            [IntegrationSelector.depth(index) for index in range(16)]
+        )
 
 
 def test_unknown_verifier_in_selector_plan_is_rejected() -> None:

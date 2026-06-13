@@ -347,14 +347,15 @@ class _DirectoryLock:
 
     def _reclaim_if_stale(self) -> None:
         try:
+            fallback_created_at = self.path.stat().st_mtime
+        except (FileNotFoundError, OSError):
+            return
+        try:
             created_at = float(
                 (self.path / "created_at").read_text(encoding="ascii")
             )
         except (FileNotFoundError, OSError, ValueError):
-            try:
-                created_at = self.path.stat().st_mtime
-            except (FileNotFoundError, OSError):
-                return
+            created_at = fallback_created_at
         if self.clock() - created_at <= self.stale_after_seconds:
             return
         tombstone = self.path.with_name(f"{self.path.name}.{uuid4().hex}.stale")

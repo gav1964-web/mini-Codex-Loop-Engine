@@ -14,6 +14,7 @@ from loop_engine.tasks import (
     IntegrationPlan,
     IntegrationRoute,
     IntegrationSelector,
+    IntegrationSelectorGroup,
     LeafExecutionResult,
     ScriptedTaskDecomposer,
     TaskGraph,
@@ -43,8 +44,13 @@ def main() -> int:
         IntegrationCompositionPolicy.create(
             selector_routes=[
                 IntegrationRoute(
-                    "root-depth",
-                    IntegrationSelector.depth(0),
+                    "root-build",
+                    IntegrationSelectorGroup.all_of(
+                        [
+                            IntegrationSelector.depth(0),
+                            IntegrationSelector.node_id_prefix("root"),
+                        ]
+                    ),
                     IntegrationPlan.create(["contract", "system"]),
                 )
             ]

@@ -686,8 +686,30 @@ Evidence содержит выбранный route и, для selector route, т
 `value`. Scheduler по-прежнему не знает о routing types: resolver полностью
 остаётся внутри реализации `IntegrationVerifier`.
 
-Канонический demo теперь выбирает root integration plan через selector
-`depth=0`:
+В `0.29.0` leaf selectors дополнены bounded compound expressions:
+
+```text
+IntegrationSelectorGroup.all_of([...])
+IntegrationSelectorGroup.any_of([...])
+```
+
+Группы можно вкладывать друг в друга, сочетая, например, depth с одним из
+нескольких допустимых prefix/capability условий. Empty groups, неизвестные
+operators и нетипизированные children отклоняются. Выражение ограничено четырьмя
+уровнями групп и шестнадцатью selector nodes, поэтому policy не может создать
+неограниченную рекурсивную стоимость matching.
+
+Selector algebra вынесена в независимый `integration_selectors.py`;
+`integration_composition.py` отвечает только за route resolution и запуск
+verifier plan. Группы immutable и копируют входную последовательность.
+
+Приоритет не изменился: exact route, затем первый matching selector route,
+затем default. Metadata по-прежнему не участвует в matching. Evidence для leaf
+сохраняет `kind/value`, а для group содержит нормализованное дерево
+`operator/selectors`.
+
+Канонический demo теперь выбирает root integration plan через compound
+`all(depth=0, node_id_prefix=root)`:
 
 ```bash
 python -m examples.integration_composition_demo
@@ -1402,8 +1424,7 @@ Loop Engine
 
 ## Следующий этап
 
-1. Compound typed selectors с явным all/any composition.
-2. Persistent service-run reports и operational observability.
-3. Release-history comparison и regression trends.
-4. Optional fencing tokens для опасных resource adapters.
-5. Repeated-sample statistics для noisy latency measurements.
+1. Persistent service-run reports и operational observability.
+2. Release-history comparison и regression trends.
+3. Optional fencing tokens для опасных resource adapters.
+4. Repeated-sample statistics для noisy latency measurements.

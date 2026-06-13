@@ -33,7 +33,11 @@ from .integration_composition import (
     IntegrationCompositionPolicy,
     IntegrationPlan,
     IntegrationRoute,
+)
+from .integration_selectors import (
     IntegrationSelector,
+    IntegrationSelectorExpression,
+    IntegrationSelectorGroup,
 )
 from .plugin_acquisition import (
     GeneratedCapability,
@@ -107,6 +111,8 @@ __all__ = [
     "IntegrationPlan",
     "IntegrationRoute",
     "IntegrationSelector",
+    "IntegrationSelectorExpression",
+    "IntegrationSelectorGroup",
     "JsonTaskGraphStore",
     "LeafExecutionResult",
     "LexicographicStrategyJudge",
