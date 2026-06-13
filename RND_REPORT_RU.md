@@ -323,10 +323,19 @@ mini-Codex 7, а извлекает из неё общую идею управл
 228. Stale lock без timestamp восстанавливается по filesystem mtime.
 229. Malformed lease-manager response блокируется как contract error.
 230. Отдельный spawned process удерживает write lease от второго process.
+231. Composite gate требует pytest, wheel smoke и strict sandbox.
+232. Failed stage не отменяет запуск последующих release stages.
+233. Несколько failed stages сохраняются в стабильном порядке.
+234. Exact unavailable sandbox допускает только visible degraded status.
+235. Unexpected sandbox block остаётся failed при degraded-ok.
+236. Timeout и output truncation каждого stage завершаются fail-closed.
+237. Malformed sandbox JSON блокирует composite release.
+238. Launch failure одного stage не стирает evidence других.
+239. Composite report имеет canonical JSON shape и atomic write.
 
 ## Результаты проверок
 
-- `pytest`: 224 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 233 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -392,6 +401,11 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - cross-process lease targeted tests: 28 passed вместе с claims/parallel contour;
 - canonical resource lease demo: contention до release, acquire после release;
 - wheel `0.25.0` успешно собран и проверен через public lease exports;
+- composite release-gate targeted tests: 19 passed вместе с sandbox contour;
+- wheel helper собрал, установил и импортировал wheel `0.26.0`;
+- canonical composite gate сохранил pytest, wheel и sandbox stage evidence;
+- strict `python -m tools.release_gate`: passed, все 3 stages releasable;
+- composite sandbox stage: `wsl_bubblewrap`, 8/8 checks passed;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -423,7 +437,6 @@ strategy.
 - прямые SDK конкретных LLM-провайдеров;
 - parallel actions;
 - multi-agent delegation;
-- automatic sandbox backend release gate;
 - расширенная coding-specific verification помимо exit code;
 - human approval gates.
 
@@ -444,6 +457,14 @@ structured blocked outcomes.
 Lease records связаны с PID identity. Падение process допускает безопасное
 удаление orphan records; зависший scheduler thread внутри живого process пока
 остаётся явным ограничением и требует heartbeat/expiry.
+
+Версия `0.26.0` добавляет canonical composite release gate. Полный pytest,
+чистый wheel build/install/import и strict real sandbox выполняются как три
+независимых bounded stages без short-circuit.
+
+Production status `passed` возможен только при успехе всех stages. Exact
+unavailable sandbox может дать только явно запрошенный non-production status
+`degraded`; остальные failures остаются блокирующими.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

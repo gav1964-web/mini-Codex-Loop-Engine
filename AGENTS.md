@@ -90,6 +90,11 @@ This project is a universal loop engine, not a coding-agent implementation.
   direct Python process.
 - Production release validation must run the canonical sandbox release gate in
   strict mode and require status `passed` with every isolation check true.
+- Canonical release validation must run pytest, wheel build/install/import, and
+  the strict sandbox gate as independent bounded stages and retain every result.
+- A failed release stage must not short-circuit later evidence collection.
+- Composite release status may be `passed` only when every required stage
+  passes; explicit sandbox degradation must remain visibly `degraded`.
 - `--degraded-ok` may be used only for explicitly non-production validation and
   must remain visibly `degraded`, never `passed`.
 - Sandbox mounts, network isolation, executables, and trust classification must

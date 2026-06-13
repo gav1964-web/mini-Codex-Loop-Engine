@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mini-codex-loop-engine"
-version = "0.25.0"
+version = "0.26.0"
 description = "Universal event-driven loop runtime for agentic R&D."
 readme = "README.md"
 requires-python = ">=3.11"

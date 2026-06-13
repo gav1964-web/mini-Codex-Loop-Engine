@@ -116,7 +116,7 @@ class SandboxReleaseGate:
                     ),
                 ),
             )
-            report = _interpret_process(process, degraded_ok=degraded_ok)
+            report = interpret_sandbox_process(process, degraded_ok=degraded_ok)
         except Exception as exc:
             report = SandboxReleaseGateReport(
                 schema_version=1,
@@ -135,7 +135,7 @@ class SandboxReleaseGate:
         return report
 
 
-def _interpret_process(
+def interpret_sandbox_process(
     process: dict[str, Any],
     *,
     degraded_ok: bool,

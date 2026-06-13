@@ -1165,6 +1165,60 @@ build/sandbox_release_gate/report.json
 Real strict gate 12 июня 2026 года завершился `passed`: `8/8`, backend
 `wsl_bubblewrap`, release decision `releasable=true`.
 
+### Composite Release Gate
+
+В `0.26.0` отдельные release-проверки объединены внешним оркестратором:
+
+```text
+python -m tools.release_gate
+  -> bounded pytest stage
+  -> bounded wheel build/install/import stage
+  -> bounded strict sandbox stage
+  -> retain every stage report
+  -> atomic composite report
+  -> passed / degraded / failed
+```
+
+Каждый stage задаётся immutable `ReleaseCommand` с собственными timeout и
+output bounds. Все процессы и внутренние шаги wheel smoke проходят через
+`BoundedSubprocessTool`, поэтому сохраняют process ownership, heartbeat и
+process-tree termination.
+
+Gate использует all-of semantics, но не short-circuit. Даже после failed pytest
+запускаются wheel smoke и sandbox, чтобы итоговый report содержал полный набор
+release evidence. Обязательные stages имеют стабильные имена:
+
+- `pytest`;
+- `wheel_smoke`;
+- `sandbox`.
+
+Обычный command stage проходит только при exit code `0`, без timeout и output
+truncation. Wheel smoke отдельно:
+
+1. строит ровно один wheel;
+2. устанавливает его в чистый временный target;
+3. импортирует публичные contracts из установленного пакета.
+
+Sandbox stage переиспользует строгую интерпретацию standalone gate и требует
+все восемь isolation checks.
+
+Composite status:
+
+- `passed` - все три stages прошли;
+- `degraded` - pytest и wheel прошли, а sandbox unavailable разрешён явным
+  `--degraded-ok`;
+- `failed` - любой required stage не releasable.
+
+Failure одного stage не стирает результаты остальных. Report versioned,
+записывается атомарно и по умолчанию находится в:
+
+```text
+build/release_gate/report.json
+```
+
+Standalone `python -m tools.sandbox_release_gate` сохраняется для быстрой
+изолированной диагностики sandbox backend.
+
 ### Leaf Execution
 
 `LoopEngineLeafExecutor` строит task-specific `LoopEngine + LoopDefinition`,
@@ -1277,8 +1331,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Composite release gate для pytest, wheel smoke и real sandbox.
-2. Lease heartbeat/expiry для зависшего scheduler внутри живого процесса.
-3. Measured latency/cost metrics для richer strategy judge policies.
-4. Compound typed selectors с явным all/any composition.
-5. Persistent service-run reports и operational observability.
+1. Lease heartbeat/expiry для зависшего scheduler внутри живого процесса.
+2. Measured latency/cost metrics для richer strategy judge policies.
+3. Compound typed selectors с явным all/any composition.
+4. Persistent service-run reports и operational observability.
+5. Release-history comparison и regression trends.

@@ -162,6 +162,7 @@ state = engine.run(definition)
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
 - strict automated release gate for the real sandbox backend;
+- composite bounded release gate for pytest, wheel smoke, and sandbox evidence;
 - bounded parent integration commands and status propagation;
 - external routing and all-of composition for parent integration checks;
 - typed structural selectors for reusable parent integration routes;
@@ -173,27 +174,26 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.25.0` adds an optional filesystem-backed resource lease manager for
-multiple scheduler processes. It atomically acquires every claim in a selected
-batch before leaf attempts and execution budget are consumed.
+Version `0.26.0` adds one composite release gate over three independent bounded
+stages: the full pytest suite, clean wheel build/install/import smoke, and the
+strict real sandbox gate.
 
-Read leases may coexist; a write lease conflicts with every lease for the same
-canonical resource. Contention blocks the affected leaves with structured
-evidence, and leases are released after successful, blocked, or failed worker
-outcomes. Records abandoned by a dead process are reclaimed only after its PID
-identity no longer matches.
+Every stage runs even when an earlier stage fails, so the atomic JSON report
+retains complete release evidence. Production status is `passed` only when all
+three stages pass. Explicit non-production sandbox degradation remains
+`degraded`, never `passed`.
 
-Run the shared-registry example with:
+Run the complete gate with:
 
 ```bash
-python -m examples.resource_leases_demo
+python -m tools.release_gate
 ```
 
 The typed integration example remains available as
 `python -m examples.integration_composition_demo`.
 The strategy comparison and ranking example remains available as
 `python -m examples.decomposition_strategy_compare`.
-The strict production sandbox gate remains available as
+The standalone strict sandbox gate remains available as
 `python -m tools.sandbox_release_gate`.
 For explicitly non-production validation, `--degraded-ok` permits an unavailable
 backend but reports `degraded`, never `passed`.
