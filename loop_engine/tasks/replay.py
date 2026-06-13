@@ -5,24 +5,31 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from copy import deepcopy
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Callable
 
 from .models import (
     AtomicLeafSpec,
     AtomicityDecision,
     ChildTaskSpec,
-    TaskBudget,
     TaskGraph,
     TaskNode,
 )
 from .ports import TaskDecomposer
 from .scheduler import TaskScheduler
+from .strategy_metrics import (
+    ReplayTaskCase,
+    StrategyMetrics,
+    StrategyUsage,
+    StrategyUsageProvider,
+    attach_strategy_usage,
+    strategy_metrics,
+)
 
 DECOMPOSITION_TRACE_SCHEMA_VERSION = 1
-STRATEGY_COMPARISON_SCHEMA_VERSION = 1
+STRATEGY_COMPARISON_SCHEMA_VERSION = 2
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -123,41 +130,6 @@ class RecordedTaskDecomposer:
 
 
 @dataclass(frozen=True, slots=True)
-class ReplayTaskCase:
-    name: str
-    goal: str
-    success_criteria: tuple[str, ...] = ()
-    required_capabilities: tuple[str, ...] = ()
-    budget: TaskBudget = field(default_factory=TaskBudget)
-
-    def create_graph(self, *, graph_id: str) -> TaskGraph:
-        return TaskGraph.create(
-            self.goal,
-            success_criteria=list(self.success_criteria),
-            required_capabilities=list(self.required_capabilities),
-            budget=deepcopy(self.budget),
-            graph_id=graph_id,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class StrategyMetrics:
-    strategy: str
-    case: str
-    root_status: str
-    node_count: int
-    leaf_count: int
-    max_depth: int
-    dependency_edge_count: int
-    leaf_executions: int
-    event_count: int
-    failed_count: int
-    blocked_count: int
-    topology_sha256: str
-    outcome_sha256: str
-
-
-@dataclass(frozen=True, slots=True)
 class StrategyComparison:
     case: str
     runs: tuple[StrategyMetrics, ...]
@@ -198,8 +170,13 @@ class DecompositionStrategyRunner:
     def __init__(
         self,
         scheduler_factory: Callable[[TaskDecomposer], TaskScheduler],
+        *,
+        usage_provider: StrategyUsageProvider | None = None,
+        clock: Callable[[], float] = perf_counter,
     ) -> None:
         self.scheduler_factory = scheduler_factory
+        self.usage_provider = usage_provider
+        self.clock = clock
 
     def compare(
         self,
@@ -216,8 +193,30 @@ class DecompositionStrategyRunner:
             graph = case.create_graph(
                 graph_id=_stable_graph_id(case.name, strategy_name)
             )
+            started = self.clock()
             result = self.scheduler_factory(strategies[name]()).run(graph)
-            runs.append(strategy_metrics(strategy_name, case.name, result))
+            elapsed_seconds = self.clock() - started
+            if elapsed_seconds < 0:
+                raise ValueError("strategy measurement clock moved backwards")
+            elapsed_ms = round(elapsed_seconds * 1000)
+            metrics = strategy_metrics(
+                strategy_name,
+                case.name,
+                result,
+                elapsed_ms=elapsed_ms,
+            )
+            usage = (
+                self.usage_provider.measure(
+                    strategy=strategy_name,
+                    case=case,
+                    graph=result,
+                )
+                if self.usage_provider is not None
+                else None
+            )
+            if usage is not None and not isinstance(usage, StrategyUsage):
+                raise TypeError("strategy usage provider must return StrategyUsage")
+            runs.append(attach_strategy_usage(metrics, usage))
         return StrategyComparison(
             case=case.name,
             runs=tuple(runs),
@@ -244,58 +243,6 @@ def decomposition_context_sha256(node: TaskNode, graph: TaskGraph) -> str:
         "leaf_executions": graph.leaf_executions,
     }
     return _sha256(payload)
-
-
-def strategy_metrics(
-    strategy: str,
-    case: str,
-    graph: TaskGraph,
-) -> StrategyMetrics:
-    leaves = [node for node in graph.nodes.values() if not node.children]
-    topology = [
-        {
-            "id": node.id,
-            "parent_id": node.parent_id,
-            "goal": node.goal,
-            "criteria": node.success_criteria,
-            "capabilities": node.required_capabilities,
-            "dependencies": node.dependencies,
-            "children": node.children,
-            "depth": node.depth,
-        }
-        for node in sorted(graph.nodes.values(), key=lambda item: item.id)
-    ]
-    outcomes = [
-        {
-            "id": node.id,
-            "status": str(node.status),
-            "attempts": node.attempts,
-            "error": node.error,
-            "summary": node.result.summary if node.result is not None else None,
-        }
-        for node in sorted(graph.nodes.values(), key=lambda item: item.id)
-    ]
-    return StrategyMetrics(
-        strategy=strategy,
-        case=case,
-        root_status=str(graph.root.status),
-        node_count=len(graph.nodes),
-        leaf_count=len(leaves),
-        max_depth=max(node.depth for node in graph.nodes.values()),
-        dependency_edge_count=sum(
-            len(node.dependencies) for node in graph.nodes.values()
-        ),
-        leaf_executions=graph.leaf_executions,
-        event_count=len(graph.events),
-        failed_count=sum(
-            str(node.status) == "failed" for node in graph.nodes.values()
-        ),
-        blocked_count=sum(
-            str(node.status) == "blocked" for node in graph.nodes.values()
-        ),
-        topology_sha256=_sha256(topology),
-        outcome_sha256=_sha256(outcomes),
-    )
 
 
 def _decision_from_dict(value: dict) -> AtomicityDecision:

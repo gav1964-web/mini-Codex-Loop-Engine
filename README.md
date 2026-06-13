@@ -159,6 +159,7 @@ state = engine.run(definition)
 - lease heartbeat and expiry recovery for stalled scheduler ownership;
 - context-bound decomposition replay and strategy comparison;
 - explicit lexicographic judge policies for decomposition strategy ranking;
+- measured latency and externally supplied token/cost strategy evidence;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
@@ -175,19 +176,18 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.27.0` adds heartbeat and expiry to cross-process resource leases.
-Active operations renew ownership before TTL; expired records can be reclaimed
-even when the original process is still alive.
+Version `0.28.0` adds measured strategy latency plus provider-neutral token and
+cost evidence. The runner owns monotonic timing; usage comes only from an
+explicit typed provider.
 
-Heartbeat lifecycle is explicitly owned by the leased operation and joined
-before release. Setup or renewal failure produces a failed task result. This
-recovers stalled scheduler ownership, while dangerous side effects still need
-fencing or a cancellable supervised worker for strict overlap prevention.
+Judge policies can now use `elapsed_ms`, token counters, or
+`cost_microunits`. Missing measurements and mixed cost bases fail closed.
+Topology and outcome fingerprints remain stable and exclude timing/cost data.
 
-Run the heartbeat/expiry example with:
+Run the measured comparison with:
 
 ```bash
-python -m examples.resource_leases_demo
+python -m examples.decomposition_strategy_compare
 ```
 
 The complete production gate remains `python -m tools.release_gate`.

@@ -67,8 +67,12 @@ from .replay import (
     RecordingTaskDecomposer,
     ReplayTaskCase,
     StrategyComparison,
-    StrategyMetrics,
     decomposition_context_sha256,
+)
+from .strategy_metrics import (
+    StrategyMetrics,
+    StrategyUsage,
+    StrategyUsageProvider,
     strategy_metrics,
 )
 from .scheduler import TaskScheduler
@@ -134,6 +138,8 @@ __all__ = [
     "StrategyComparison",
     "StrategyJudgePolicy",
     "StrategyMetrics",
+    "StrategyUsage",
+    "StrategyUsageProvider",
     "StrategyObjective",
     "StrategyRank",
     "StrategyRanking",

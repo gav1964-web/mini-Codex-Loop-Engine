@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 
 from loop_engine.tasks import (
@@ -18,6 +19,7 @@ from loop_engine.tasks import (
     ScriptedTaskDecomposer,
     StrategyJudgePolicy,
     StrategyObjective,
+    StrategyUsage,
     TaskScheduler,
 )
 
@@ -38,16 +40,18 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _scheduler(decomposer) -> TaskScheduler:
+    def execute(node, graph):
+        time.sleep(0.01)
+        return LeafExecutionResult(
+            status="completed",
+            summary=f"{node.id} completed",
+            evidence={"node": node.id},
+        )
+
     return TaskScheduler(
         decomposer=decomposer,
         capability_resolver=InMemoryCapabilityResolver({"work"}),
-        leaf_executor=FunctionLeafExecutor(
-            lambda node, graph: LeafExecutionResult(
-                status="completed",
-                summary=f"{node.id} completed",
-                evidence={"node": node.id},
-            )
-        ),
+        leaf_executor=FunctionLeafExecutor(execute),
         integration_verifier=FunctionIntegrationVerifier(),
     )
 
@@ -78,9 +82,23 @@ def _staged() -> ScriptedTaskDecomposer:
     )
 
 
+class _DemoUsage:
+    def measure(self, *, strategy, case, graph):
+        multiplier = 1 if strategy == "atomic" else graph.leaf_executions
+        return StrategyUsage(
+            input_tokens=120 * multiplier,
+            output_tokens=30 * multiplier,
+            cost_microunits=75 * multiplier,
+            cost_basis="demo-cost-v1",
+        )
+
+
 def main() -> int:
     args = _parser().parse_args()
-    comparison = DecompositionStrategyRunner(_scheduler).compare(
+    comparison = DecompositionStrategyRunner(
+        _scheduler,
+        usage_provider=_DemoUsage(),
+    ).compare(
         ReplayTaskCase(
             name="inspect-apply-verify",
             goal="Inspect, change, and verify target",
@@ -97,6 +115,8 @@ def main() -> int:
             objectives=[
                 StrategyObjective("failed_count"),
                 StrategyObjective("blocked_count"),
+                StrategyObjective("cost_microunits"),
+                StrategyObjective("elapsed_ms"),
                 StrategyObjective("leaf_executions"),
                 StrategyObjective("node_count"),
                 StrategyObjective("max_depth"),

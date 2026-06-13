@@ -67,6 +67,12 @@ This project is a universal loop engine, not a coding-agent implementation.
   a hidden subjective winner policy in the scheduler or replay layer.
 - Strategy ranking must use an explicit external judge policy with ordered,
   named objectives; ties must remain ties and ineligible outcomes unranked.
+- Strategy elapsed time must be measured by the runner with a monotonic clock.
+- Token and cost metrics must come from an explicit typed usage provider, never
+  inferred from task metadata or hidden provider pricing.
+- Cost objectives require measured values with one comparable cost basis across
+  eligible runs; missing or mixed measurements must fail closed.
+- Timing and usage metrics must not alter topology or outcome fingerprints.
 - Task decomposition, capability resolution/acquisition, leaf execution, and
   parent integration must remain independent ports.
 - A non-atomic node must not execute directly; it must produce bounded children.

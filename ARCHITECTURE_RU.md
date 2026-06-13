@@ -952,6 +952,53 @@ set.
 python -m examples.decomposition_strategy_compare
 ```
 
+### Measured Strategy Evidence
+
+В `0.28.0` comparison schema v2 расширяет `StrategyMetrics`:
+
+- `elapsed_ms`;
+- `input_tokens`;
+- `output_tokens`;
+- `total_tokens`;
+- `cost_microunits`;
+- `cost_basis`.
+
+Elapsed time измеряет сам `DecompositionStrategyRunner` через monotonic clock,
+который можно инъектировать для deterministic tests. Измеряется полный
+scheduler run конкретной decomposition strategy.
+
+Token и cost metrics runner не выводит из task metadata, LLM response или имени
+модели. Их может вернуть только внешний typed `StrategyUsageProvider`:
+
+```text
+strategy run
+  -> measured elapsed_ms
+  -> optional external StrategyUsage
+  -> StrategyMetrics
+  -> explicit judge objectives
+```
+
+`StrategyUsage` требует неотрицательные integer counters и непустой
+`cost_basis`. `cost_microunits` является нормализованной внешней единицей, а не
+встроенным прайс-листом engine. Сравнение cost разрешено только когда все
+eligible runs измерены в одном basis.
+
+Judge поддерживает objectives:
+
+- `elapsed_ms`;
+- `input_tokens`;
+- `output_tokens`;
+- `total_tokens`;
+- `cost_microunits`.
+
+Если выбранная objective не измерена, либо cost bases различаются, ranking
+завершается fail-closed. Нулевое значение допустимо только как явно измеренный
+ноль; отсутствие evidence представляется `None`.
+
+Timing и usage не входят в topology/outcome fingerprints. Повтор одного и того
+же graph с другой latency или ценой остаётся topology/outcome equivalent, но
+может получить другой rank только по явно выбранной внешней policy.
+
 Нейтральный report сохраняется в `build/decomposition_comparison.json`, ranking
 report — в `build/decomposition_ranking.json`. Оба остаются execution artifacts.
 Выбранный reference baseline следует переносить в human-maintained документ, а
@@ -1355,8 +1402,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Measured latency/cost metrics для richer strategy judge policies.
-2. Compound typed selectors с явным all/any composition.
-3. Persistent service-run reports и operational observability.
-4. Release-history comparison и regression trends.
-5. Optional fencing tokens для опасных resource adapters.
+1. Compound typed selectors с явным all/any composition.
+2. Persistent service-run reports и operational observability.
+3. Release-history comparison и regression trends.
+4. Optional fencing tokens для опасных resource adapters.
+5. Repeated-sample statistics для noisy latency measurements.

@@ -22,6 +22,11 @@ def _metrics(
     executions: int = 1,
     failed: int = 0,
     blocked: int = 0,
+    elapsed_ms: int = 0,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    cost: int | None = None,
+    cost_basis: str | None = None,
 ) -> StrategyMetrics:
     return StrategyMetrics(
         strategy=strategy,
@@ -37,6 +42,16 @@ def _metrics(
         blocked_count=blocked,
         topology_sha256=str(nodes) * 64,
         outcome_sha256=str(executions) * 64,
+        elapsed_ms=elapsed_ms,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=(
+            input_tokens + output_tokens
+            if input_tokens is not None and output_tokens is not None
+            else None
+        ),
+        cost_microunits=cost,
+        cost_basis=cost_basis,
     )
 
 
@@ -89,6 +104,54 @@ def test_max_direction_reverses_only_declared_metric() -> None:
     )
 
     assert ranking.winners == ("broad",)
+
+
+def test_measured_latency_and_cost_can_be_explicit_objectives() -> None:
+    ranking = LexicographicStrategyJudge(
+        _policy(
+            StrategyObjective("cost_microunits"),
+            StrategyObjective("elapsed_ms"),
+        )
+    ).rank(
+        _comparison(
+            _metrics(
+                "fast-expensive",
+                elapsed_ms=10,
+                cost=200,
+                cost_basis="usd-micro-v1",
+            ),
+            _metrics(
+                "slow-cheap",
+                elapsed_ms=100,
+                cost=100,
+                cost_basis="usd-micro-v1",
+            ),
+        )
+    )
+
+    assert ranking.winners == ("slow-cheap",)
+    assert ranking.entries[0].objective_values == (100, 100)
+
+
+def test_unmeasured_objective_and_mixed_cost_basis_fail_closed() -> None:
+    token_judge = LexicographicStrategyJudge(
+        _policy(StrategyObjective("total_tokens"))
+    )
+    with pytest.raises(ValueError, match="not measured:missing"):
+        token_judge.rank(_comparison(_metrics("missing")))
+
+    cost_judge = LexicographicStrategyJudge(
+        _policy(StrategyObjective("cost_microunits"))
+    )
+    with pytest.raises(ValueError, match="not measured"):
+        cost_judge.rank(_comparison(_metrics("missing-cost")))
+    with pytest.raises(ValueError, match="not comparable"):
+        cost_judge.rank(
+            _comparison(
+                _metrics("a", cost=1, cost_basis="basis-a"),
+                _metrics("b", cost=1, cost_basis="basis-b"),
+            )
+        )
 
 
 def test_equal_objective_tuples_share_rank() -> None:
@@ -204,3 +267,12 @@ def test_direct_policy_construction_cannot_bypass_validation() -> None:
             eligible_root_statuses={"complete"},
             objectives=[StrategyObjective("node_count")],
         )
+
+
+def test_direct_metrics_construction_validates_measurement_shape() -> None:
+    with pytest.raises(ValueError, match="elapsed_ms"):
+        _metrics("negative", elapsed_ms=-1)
+    with pytest.raises(ValueError, match="token metrics must be complete"):
+        _metrics("partial", input_tokens=1)
+    with pytest.raises(ValueError, match="cost and cost_basis"):
+        _metrics("cost", cost=1)

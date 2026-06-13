@@ -19,6 +19,7 @@ from loop_engine.tasks import (
     TaskGraph,
     TaskScheduler,
     TaskStatus,
+    StrategyUsage,
 )
 
 
@@ -157,6 +158,125 @@ def test_strategy_runner_detects_topology_and_outcome_divergence() -> None:
     assert staged.leaf_executions == 2
 
 
+def test_strategy_runner_records_elapsed_and_external_usage() -> None:
+    ticks = iter([10.0, 10.125, 20.0, 20.25])
+
+    class Usage:
+        def measure(self, *, strategy, case, graph):
+            multiplier = 1 if strategy == "atomic" else 2
+            return StrategyUsage(
+                input_tokens=100 * multiplier,
+                output_tokens=25 * multiplier,
+                cost_microunits=50 * multiplier,
+                cost_basis="test-units-v1",
+            )
+
+    comparison = DecompositionStrategyRunner(
+        _scheduler,
+        usage_provider=Usage(),
+        clock=lambda: next(ticks),
+    ).compare(
+        ReplayTaskCase(name="measured", goal="Complete work"),
+        {
+            "atomic": lambda: ScriptedTaskDecomposer({}),
+            "staged": _staged_decomposer,
+        },
+    )
+
+    atomic, staged = comparison.runs
+    assert atomic.elapsed_ms == 125
+    assert staged.elapsed_ms == 250
+    assert atomic.total_tokens == 125
+    assert staged.total_tokens == 250
+    assert atomic.cost_microunits == 50
+    assert atomic.cost_basis == "test-units-v1"
+
+
+def test_strategy_runner_leaves_usage_unmeasured_without_provider() -> None:
+    comparison = DecompositionStrategyRunner(
+        _scheduler,
+        clock=iter([1.0, 1.01]).__next__,
+    ).compare(
+        ReplayTaskCase(name="unmeasured", goal="Complete work"),
+        {"atomic": lambda: ScriptedTaskDecomposer({})},
+    )
+
+    run = comparison.runs[0]
+    assert run.elapsed_ms == 10
+    assert run.input_tokens is None
+    assert run.cost_microunits is None
+    assert run.cost_basis is None
+
+
+def test_strategy_runner_rejects_clock_moving_backwards() -> None:
+    with pytest.raises(ValueError, match="clock moved backwards"):
+        DecompositionStrategyRunner(
+            _scheduler,
+            clock=iter([2.0, 1.0]).__next__,
+        ).compare(
+            ReplayTaskCase(name="clock", goal="Complete work"),
+            {"atomic": lambda: ScriptedTaskDecomposer({})},
+        )
+
+
+def test_usage_contract_rejects_invalid_values_and_provider_type() -> None:
+    with pytest.raises(ValueError, match="non-negative integers"):
+        StrategyUsage(
+            input_tokens=-1,
+            output_tokens=0,
+            cost_microunits=0,
+            cost_basis="x",
+        )
+    with pytest.raises(ValueError, match="cost_basis"):
+        StrategyUsage(
+            input_tokens=0,
+            output_tokens=0,
+            cost_microunits=0,
+            cost_basis=" ",
+        )
+
+    class InvalidUsage:
+        def measure(self, **kwargs):
+            return {"input_tokens": 1}
+
+    with pytest.raises(TypeError, match="StrategyUsage"):
+        DecompositionStrategyRunner(
+            _scheduler,
+            usage_provider=InvalidUsage(),
+            clock=iter([1.0, 2.0]).__next__,
+        ).compare(
+            ReplayTaskCase(name="invalid-usage", goal="Complete work"),
+            {"atomic": lambda: ScriptedTaskDecomposer({})},
+        )
+
+
+def test_usage_provider_cannot_rewrite_captured_strategy_metrics() -> None:
+    class MutatingUsage:
+        def measure(self, *, strategy, case, graph):
+            graph.root.status = TaskStatus.FAILED
+            graph.nodes.clear()
+            return StrategyUsage(
+                input_tokens=1,
+                output_tokens=1,
+                cost_microunits=1,
+                cost_basis="test",
+            )
+
+    comparison = DecompositionStrategyRunner(
+        _scheduler,
+        usage_provider=MutatingUsage(),
+        clock=iter([1.0, 1.01]).__next__,
+    ).compare(
+        ReplayTaskCase(name="provider-isolation", goal="Complete work"),
+        {"atomic": lambda: ScriptedTaskDecomposer({})},
+    )
+
+    run = comparison.runs[0]
+    assert run.root_status == "completed"
+    assert run.node_count == 1
+    assert run.total_tokens == 2
+
+
 def test_strategy_comparison_saves_versioned_json(tmp_path) -> None:
     comparison = DecompositionStrategyRunner(_scheduler).compare(
         ReplayTaskCase(name="report", goal="Complete work"),
@@ -167,7 +287,7 @@ def test_strategy_comparison_saves_versioned_json(tmp_path) -> None:
     comparison.save(path)
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert payload["case"] == "report"
     assert payload["topology_diverged"] is False
     assert payload["runs"][0]["strategy"] == "atomic"

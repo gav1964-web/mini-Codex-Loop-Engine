@@ -8,7 +8,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .models import TaskStatus
-from .replay import StrategyComparison, StrategyMetrics
+from .replay import StrategyComparison
+from .strategy_metrics import StrategyMetrics
 
 STRATEGY_RANKING_SCHEMA_VERSION = 1
 _NUMERIC_METRICS = frozenset(
@@ -21,6 +22,11 @@ _NUMERIC_METRICS = frozenset(
         "event_count",
         "failed_count",
         "blocked_count",
+        "elapsed_ms",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "cost_microunits",
     }
 )
 
@@ -154,13 +160,11 @@ class LexicographicStrategyJudge:
         if any(run.case != comparison.case for run in comparison.runs):
             raise ValueError("strategy comparison run case mismatch")
 
+        self._validate_measurement_compatibility(comparison)
         eligible: list[tuple[tuple[int, ...], StrategyMetrics]] = []
         ineligible: list[StrategyRank] = []
         for run in comparison.runs:
-            values = tuple(
-                int(getattr(run, objective.metric))
-                for objective in self.policy.objectives
-            )
+            values = _objective_values(run, self.policy.objectives)
             if run.root_status not in self.policy.eligible_root_statuses:
                 ineligible.append(
                     StrategyRank(
@@ -186,10 +190,7 @@ class LexicographicStrategyJudge:
             if key != previous_key:
                 current_rank = position
                 previous_key = key
-            values = tuple(
-                int(getattr(run, objective.metric))
-                for objective in self.policy.objectives
-            )
+            values = _objective_values(run, self.policy.objectives)
             ranked.append(
                 StrategyRank(
                     strategy=run.strategy,
@@ -212,6 +213,23 @@ class LexicographicStrategyJudge:
             entries=entries,
         )
 
+    def _validate_measurement_compatibility(
+        self,
+        comparison: StrategyComparison,
+    ) -> None:
+        metrics = {objective.metric for objective in self.policy.objectives}
+        if "cost_microunits" not in metrics:
+            return
+        bases = {
+            run.cost_basis
+            for run in comparison.runs
+            if run.root_status in self.policy.eligible_root_statuses
+        }
+        if None in bases:
+            raise ValueError("strategy objective cost_microunits is not measured")
+        if len(bases) > 1:
+            raise ValueError("strategy cost_basis values are not comparable")
+
 
 def _sort_key(
     values: tuple[int, ...],
@@ -221,6 +239,26 @@ def _sort_key(
         value if objective.direction == "min" else -value
         for value, objective in zip(values, objectives, strict=True)
     )
+
+
+def _objective_values(
+    run: StrategyMetrics,
+    objectives: tuple[StrategyObjective, ...],
+) -> tuple[int, ...]:
+    values: list[int] = []
+    for objective in objectives:
+        value = getattr(run, objective.metric)
+        if value is None:
+            raise ValueError(
+                f"strategy objective {objective.metric} is not measured:"
+                f"{run.strategy}"
+            )
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TypeError(
+                f"strategy objective {objective.metric} must be an integer"
+            )
+        values.append(value)
+    return tuple(values)
 
 
 def _ranking_reason(

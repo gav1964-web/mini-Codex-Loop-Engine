@@ -337,10 +337,19 @@ mini-Codex 7, а извлекает из неё общую идею управл
 242. Heartbeat удерживает lease дольше исходного TTL.
 243. Renewal failure переводит completed worker result в failed.
 244. Невалидный heartbeat contract блокирует operation и освобождает lease.
+245. Runner измеряет elapsed milliseconds через injected monotonic clock.
+246. External usage provider добавляет token и cost evidence.
+247. Без provider usage metrics остаются явно неизмеренными.
+248. Невалидный usage contract отклоняется fail-closed.
+249. Judge ранжирует по measured latency и comparable cost.
+250. Missing usage objective и mixed cost basis блокируют ranking.
+251. Direct metrics constructor проверяет measurement shape.
+252. Usage provider не может переписать уже captured topology/outcome metrics.
+253. Monotonic clock regression отклоняется вместо подстановки нулевой latency.
 
 ## Результаты проверок
 
-- `pytest`: 238 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 246 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -414,6 +423,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - heartbeat/lease targeted contour: 33 passed;
 - canonical lease demo удержал write lease после initial TTL и освободил его;
 - wheel `0.27.0` проверен через canonical composite release gate;
+- strategy measurement + judge targeted contour: 25 passed;
+- measured comparison demo записал schema v2 usage/latency metrics;
+- wheel `0.28.0` проверен через canonical composite release gate;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -479,6 +491,11 @@ unavailable sandbox может дать только явно запрошенн
 
 TTL не заменяет fencing: внешний side effect, уже выполняющийся после потери
 lease, требует отдельного fencing token или cancellable process boundary.
+
+Версия `0.28.0` добавляет measured strategy evidence. Runner измеряет latency,
+а token/cost данные принимает только через внешний typed provider. Judge может
+использовать их как explicit objectives и fail-closed отклоняет missing evidence
+или несовместимые cost bases.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
