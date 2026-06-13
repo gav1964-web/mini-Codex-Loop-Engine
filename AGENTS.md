@@ -47,6 +47,12 @@ This project is a universal loop engine, not a coding-agent implementation.
   without at least one write claim must remain sequential.
 - Resource claims must use canonical resource identities; task metadata must not
   grant, remove, or rewrite claims.
+- Multiple scheduler processes that can touch the same claimed resources must
+  share an explicit cross-process lease backend.
+- Resource leases must acquire the full batch atomically before leaf attempts
+  or execution budget are consumed, and must be released after every outcome.
+- Lease contention and registry failures must become structured task outcomes;
+  workers must never own lease acquisition or task status transitions.
 - Worker threads must receive task-graph snapshots; only the scheduler thread may
   apply results, append events, or persist task graphs.
 - Decomposition replay must bind every recorded decision to a deterministic

@@ -227,7 +227,7 @@ Service loop не заменяет command timeout внутри `BoundedSubproce
 владеет живым launcher lifecycle, reaper обслуживает stale records после потери
 launcher heartbeat.
 
-Канонический пример:
+Канонический пример локальной claim admission:
 
 ```bash
 python -m examples.process_reaper_service_demo
@@ -773,6 +773,54 @@ Resource claims являются admission policy, а не sandbox или filesy
 Executor по-прежнему обязан применять bounded workspace policy, atomic writes и
 собственные OS-level ограничения.
 
+### Cross-Process Resource Leases
+
+В `0.25.0` к локальной batch admission добавлен optional
+`FileResourceLeaseManager`:
+
+```text
+capability-admitted leaves
+  -> canonical batch claims
+  -> atomic acquire in shared JSON registry
+  -> mark running and reserve budget
+  -> execute workers
+  -> release in finally
+```
+
+Manager использует один versioned JSON registry и короткоживущий lock directory.
+Полный набор claims приобретается одной транзакцией: частичная резервация
+невозможна. Семантика конфликтов совпадает с локальным scheduler policy:
+`read/read` совместимы, любое пересечение с `write` блокируется.
+
+Acquire имеет bounded timeout и polling interval. При contention scheduler:
+
+- не переводит leaf в `running`;
+- не увеличивает `attempts`;
+- не расходует `max_leaf_executions`;
+- возвращает `resource_lease_unavailable:<resources>`.
+
+Ошибка registry становится `resource_lease_error`, ошибка release -
+`resource_lease_release_error`. Workers не получают lease manager и не могут
+менять task statuses. Authority остаётся у `TaskScheduler`.
+
+Каждая запись содержит owner id, PID и process identity. Перед acquire manager
+удаляет lease только если текущая identity PID больше не совпадает с записанной.
+Это позволяет восстановиться после падения scheduler process и защищает от
+переиспользования PID.
+
+Граница гарантии: если scheduler-поток погиб внутри всё ещё живого процесса,
+его lease не считается orphan. Для такого случая нужен следующий слой -
+heartbeat/expiry либо отдельный scheduler process supervisor.
+
+Backend включается явно через `TaskScheduler(resource_lease_manager=...)`.
+Без него поведение `0.20.0` полностью сохраняется.
+
+Канонический пример:
+
+```bash
+python -m examples.resource_leases_demo
+```
+
 Канонический пример:
 
 ```bash
@@ -1229,8 +1277,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Cross-process resource lease backend для нескольких scheduler processes.
-2. Composite release gate для pytest, wheel smoke и real sandbox.
+1. Composite release gate для pytest, wheel smoke и real sandbox.
+2. Lease heartbeat/expiry для зависшего scheduler внутри живого процесса.
 3. Measured latency/cost metrics для richer strategy judge policies.
 4. Compound typed selectors с явным all/any composition.
 5. Persistent service-run reports и operational observability.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .events import record_task_event
+from .decomposition_graph import add_child_tasks, validate_task_graph
 from .models import (
     LeafExecutionResult,
     TaskGraph,
@@ -23,6 +24,12 @@ from .ports import (
     TaskDecomposer,
     TaskGraphStore,
 )
+from .resource_leases import (
+    ResourceLeaseManager,
+    batch_claims,
+    record_resource_lease,
+    run_leased_operation,
+)
 
 
 class TaskScheduler:
@@ -36,6 +43,7 @@ class TaskScheduler:
         capability_acquirer: CapabilityAcquirer | None = None,
         store: TaskGraphStore | None = None,
         policy: TaskSchedulerPolicy | None = None,
+        resource_lease_manager: ResourceLeaseManager | None = None,
     ) -> None:
         self.decomposer = decomposer
         self.capability_resolver = capability_resolver
@@ -44,9 +52,10 @@ class TaskScheduler:
         self.integration_verifier = integration_verifier
         self.store = store
         self.policy = policy or TaskSchedulerPolicy()
+        self.resource_lease_manager = resource_lease_manager
 
     def run(self, graph: TaskGraph) -> TaskGraph:
-        self._validate_graph(graph)
+        validate_task_graph(graph)
         record_task_event(
             graph,
             "task_graph_resumed" if graph.events else "task_graph_started",
@@ -157,7 +166,7 @@ class TaskScheduler:
             self._save(graph)
             return
         try:
-            self._add_children(graph, node, decision.children)
+            add_child_tasks(graph, node, decision.children)
         except ValueError as exc:
             node.status = TaskStatus.FAILED
             node.error = f"decomposition_contract_error:{exc}"
@@ -168,54 +177,7 @@ class TaskScheduler:
         record_task_event(graph, "task_decomposed", node.id, {"children": node.children})
         self._save(graph)
 
-    def _add_children(self, graph: TaskGraph, parent: TaskNode, specs) -> None:
-        keys = [spec.key for spec in specs]
-        if len(keys) != len(set(keys)) or any(not key.strip() for key in keys):
-            raise ValueError("child task keys must be unique and non-empty")
-        key_set = set(keys)
-        for spec in specs:
-            unknown_dependencies = set(spec.depends_on) - key_set
-            if unknown_dependencies:
-                raise ValueError(
-                    f"unknown child dependencies for {spec.key}: {sorted(unknown_dependencies)}"
-                )
-        self._validate_child_dependency_graph(specs)
-        key_to_id = {key: f"{parent.id}.{key}" for key in keys}
-        for spec in specs:
-            child_id = key_to_id[spec.key]
-            graph.nodes[child_id] = TaskNode(
-                id=child_id,
-                parent_id=parent.id,
-                goal=spec.goal,
-                success_criteria=list(spec.success_criteria),
-                required_capabilities=list(spec.required_capabilities),
-                dependencies=[key_to_id[key] for key in spec.depends_on],
-                depth=parent.depth + 1,
-                metadata=dict(spec.metadata),
-            )
-            parent.children.append(child_id)
-
-    @staticmethod
-    def _validate_child_dependency_graph(specs) -> None:
-        dependencies = {spec.key: list(spec.depends_on) for spec in specs}
-        visiting: set[str] = set()
-        visited: set[str] = set()
-
-        def visit(key: str) -> None:
-            if key in visiting:
-                raise ValueError("child task dependencies contain a cycle")
-            if key in visited:
-                return
-            visiting.add(key)
-            for dependency in dependencies[key]:
-                visit(dependency)
-            visiting.remove(key)
-            visited.add(key)
-
-        for key in dependencies:
-            visit(key)
-
-    def _prepare_leaf(self, graph: TaskGraph, node: TaskNode) -> bool:
+    def _admit_leaf(self, graph: TaskGraph, node: TaskNode) -> bool:
         try:
             resolution = self.capability_resolver.resolve(node, graph)
         except Exception as exc:
@@ -259,6 +221,9 @@ class TaskScheduler:
             record_task_event(graph, "task_blocked", node.id, {"missing": missing})
             self._save(graph)
             return False
+        return True
+
+    def _start_leaf(self, graph: TaskGraph, node: TaskNode) -> bool:
         if graph.leaf_executions >= graph.budget.max_leaf_executions:
             node.status = TaskStatus.BLOCKED
             node.error = "leaf_execution_budget_exhausted"
@@ -278,16 +243,65 @@ class TaskScheduler:
         candidates: list[TaskNode],
     ) -> None:
         selected = select_leaf_batch(candidates, self.policy)
-        prepared = [
-            node for node in selected if self._prepare_leaf(graph, node)
+        admitted = [
+            node for node in selected if self._admit_leaf(graph, node)
         ]
-        results = execute_leaf_batch(
-            self.leaf_executor,
-            prepared,
-            graph,
+        claims = batch_claims(admitted, self.policy)
+        prepared: list[TaskNode] = []
+
+        def execute():
+            prepared.extend(
+                node for node in admitted if self._start_leaf(graph, node)
+            )
+            return execute_leaf_batch(self.leaf_executor, prepared, graph)
+
+        def record_lease(lease) -> None:
+            record_resource_lease(graph, admitted, lease)
+            self._save(graph)
+
+        outcome = run_leased_operation(
+            manager=self.resource_lease_manager,
+            owner_id=f"{graph.id}:{','.join(node.id for node in admitted)}",
+            claims=claims,
+            on_acquired=record_lease,
+            operation=execute,
         )
+        if not outcome.executed:
+            error = outcome.acquisition_error or (
+                "resource_lease_unavailable:"
+                + (",".join(outcome.conflicting_resources) or "unknown")
+            )
+            self._block_for_resource_lease(graph, admitted, error)
+            return
+        results = outcome.value
+        if outcome.release_error is not None:
+            results = {
+                node.id: LeafExecutionResult(
+                    status="failed",
+                    summary="resource lease release failed",
+                    error=outcome.release_error,
+                )
+                for node in prepared
+            }
         for node in sorted(prepared, key=lambda item: item.id):
             self._apply_leaf_result(graph, node, results[node.id])
+
+    def _block_for_resource_lease(
+        self,
+        graph: TaskGraph,
+        nodes: list[TaskNode],
+        error: str,
+    ) -> None:
+        for node in nodes:
+            node.status = TaskStatus.BLOCKED
+            node.error = error
+            record_task_event(
+                graph,
+                "task_blocked",
+                node.id,
+                {"error": error},
+            )
+        self._save(graph)
 
     def _apply_leaf_result(
         self,
@@ -374,22 +388,6 @@ class TaskScheduler:
             if all(graph.nodes[item].status == TaskStatus.COMPLETED for item in node.dependencies):
                 candidates.append(node)
         return sorted(candidates, key=lambda item: (item.depth, item.id))
-
-    @staticmethod
-    def _validate_graph(graph: TaskGraph) -> None:
-        if graph.root_id not in graph.nodes:
-            raise ValueError("task graph root is missing")
-        if graph.budget.max_nodes <= 0 or graph.budget.max_depth < 0:
-            raise ValueError("invalid task graph budget")
-        if graph.budget.max_leaf_executions <= 0:
-            raise ValueError("max_leaf_executions must be positive")
-        if len(graph.nodes) > graph.budget.max_nodes:
-            raise ValueError("task graph already exceeds max_nodes")
-        for node in graph.nodes.values():
-            references = [*node.dependencies, *node.children]
-            missing = [item for item in references if item not in graph.nodes]
-            if missing:
-                raise ValueError(f"task node {node.id} has missing references: {missing}")
 
     def _save(self, graph: TaskGraph) -> None:
         if self.store is not None:

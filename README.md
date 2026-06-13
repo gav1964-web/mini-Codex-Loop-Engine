@@ -155,6 +155,7 @@ state = engine.run(definition)
 - bounded terminal-record retention and oldest-first registry pruning;
 - bounded parallel execution for explicitly admitted independent leaves;
 - immutable read/write resource claims for parallel workspace mutation;
+- atomic cross-process resource leases for shared scheduler resources;
 - context-bound decomposition replay and strategy comparison;
 - explicit lexicographic judge policies for decomposition strategy ranking;
 - persistent generated-capability registry with artifact integrity checks;
@@ -172,18 +173,20 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.24.0` adds optional bounded retention to the process-reaper service.
-Retention declares terminal-record age, pruning cadence, and a maximum number
-of records removed per cycle.
+Version `0.25.0` adds an optional filesystem-backed resource lease manager for
+multiple scheduler processes. It atomically acquires every claim in a selected
+batch before leaf attempts and execution budget are consumed.
 
-Pruning runs only after a successful stale-process sweep, removes oldest
-eligible terminal records first, and never touches running records. Pruning
-errors preserve sweep evidence and fail the service explicitly.
+Read leases may coexist; a write lease conflicts with every lease for the same
+canonical resource. Contention blocks the affected leaves with structured
+evidence, and leases are released after successful, blocked, or failed worker
+outcomes. Records abandoned by a dead process are reclaimed only after its PID
+identity no longer matches.
 
-Run the retention-enabled service example with:
+Run the shared-registry example with:
 
 ```bash
-python -m examples.process_reaper_service_demo
+python -m examples.resource_leases_demo
 ```
 
 The typed integration example remains available as

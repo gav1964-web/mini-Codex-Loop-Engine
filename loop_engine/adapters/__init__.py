@@ -24,6 +24,10 @@ from .subprocesses import (
     terminate_process_tree,
 )
 from .tools import ToolRegistryExecutor
+from .resource_leases import (
+    FileResourceLeaseManager,
+    FileResourceLeasePolicy,
+)
 
 __all__ = [
     "BoundedSubprocessTool",
@@ -32,6 +36,8 @@ __all__ = [
     "EvidenceContractError",
     "FunctionPlanner",
     "FunctionVerifier",
+    "FileResourceLeaseManager",
+    "FileResourceLeasePolicy",
     "LLMJSONDecodeError",
     "OpenAICompatibleJSONClient",
     "PlanContractError",

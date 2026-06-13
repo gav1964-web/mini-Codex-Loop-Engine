@@ -54,6 +54,11 @@ from .plugin_sandbox import (
 from .demo import build_task_demo
 from .persistence import JsonTaskGraphStore
 from .parallel import ResourceClaim, TaskSchedulerPolicy
+from .resource_leases import (
+    ResourceLease,
+    ResourceLeaseAttempt,
+    ResourceLeaseManager,
+)
 from .replay import (
     DecompositionStrategyRunner,
     DecompositionTrace,
@@ -114,6 +119,9 @@ __all__ = [
     "RecordingTaskDecomposer",
     "ReplayTaskCase",
     "ResourceClaim",
+    "ResourceLease",
+    "ResourceLeaseAttempt",
+    "ResourceLeaseManager",
     "SandboxMount",
     "ScriptedTaskDecomposer",
     "TaskBudget",

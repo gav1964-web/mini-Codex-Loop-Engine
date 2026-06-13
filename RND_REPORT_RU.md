@@ -313,10 +313,20 @@ mini-Codex 7, а извлекает из неё общую идею управл
 218. Invalid pruner count завершается fail-closed.
 219. Retention bounds валидируются при создании policy.
 220. Reaper policy требует typed retention contract.
+221. Два manager instances координируют write lease через общий registry.
+222. Shared read leases совместимы, writer блокируется.
+223. Набор claims приобретается атомарно без частичной резервации.
+224. Lease умершего process очищается только по PID identity mismatch.
+225. Contention не расходует leaf attempts и execution budget.
+226. Lease освобождается после executor failure.
+227. Lease policy и versioned registry fail closed на невалидном контракте.
+228. Stale lock без timestamp восстанавливается по filesystem mtime.
+229. Malformed lease-manager response блокируется как contract error.
+230. Отдельный spawned process удерживает write lease от второго process.
 
 ## Результаты проверок
 
-- `pytest`: 214 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 224 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -379,6 +389,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - process retention/reaper targeted tests: 33 passed;
 - canonical reaper demo удалил old terminal record и сохранил fresh reaped record;
 - wheel `0.24.0` успешно собран и проверен через public retention exports;
+- cross-process lease targeted tests: 28 passed вместе с claims/parallel contour;
+- canonical resource lease demo: contention до release, acquire после release;
+- wheel `0.25.0` успешно собран и проверен через public lease exports;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -423,12 +436,14 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.24.0` добавляет optional bounded retention policy в process-reaper
-service. Policy ограничивает возраст, cadence и максимальное число удалений за
-cycle.
+Версия `0.25.0` добавляет optional cross-process resource lease backend.
+Scheduler атомарно резервирует canonical claims всего batch до изменения
+attempts и execution budget. Contention и registry errors становятся
+structured blocked outcomes.
 
-Pruning выполняется oldest-first только для terminal records после успешного
-sweep. Ошибка pruning сохраняет reaping evidence и завершает service fail-closed.
+Lease records связаны с PID identity. Падение process допускает безопасное
+удаление orphan records; зависший scheduler thread внутри живого process пока
+остаётся явным ограничением и требует heartbeat/expiry.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
