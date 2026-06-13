@@ -77,6 +77,7 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - topology/outcome fingerprint grouping;
 - explicit lexicographic strategy judge policy;
 - external parent integration routing;
+- typed structural integration selectors;
 - ordered all-of integration plans;
 - snapshot-isolated composite verifier execution;
 - fail-closed integration result aggregation;
@@ -290,10 +291,21 @@ mini-Codex 7, а извлекает из неё общую идею управл
 197. Run другого case отклоняется fail-closed.
 198. Unknown/duplicate objectives отклоняются.
 199. Eligibility policy отклоняет неизвестные task statuses.
+200. Exact integration route имеет приоритет над typed selectors.
+201. Ordered selectors используют deterministic first-match.
+202. Node-id prefix selector выбирает reusable route.
+203. Depth selector выбирает reusable route.
+204. Required-capability selector выбирает reusable route.
+205. Default plan применяется только после selector miss.
+206. Metadata не может создать или подменить selector match.
+207. Selector routes копируются в immutable tuple.
+208. Duplicate selector route names отклоняются.
+209. Unknown verifier в selector plan отклоняется.
+210. Evidence сохраняет selector kind и value.
 
 ## Результаты проверок
 
-- `pytest`: 191 passed, 1 symlink test skipped из-за ограничений Windows;
+- `pytest`: 201 passed, 1 symlink test skipped из-за ограничений Windows;
 - `compileall`: успешно;
 - CLI demo: completed за 3 итерации;
 - CLI coding check: completed по exit code 0;
@@ -350,6 +362,9 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - strategy judge + replay targeted tests: 17 passed;
 - canonical comparison demo создал neutral comparison и explicit ranking;
 - wheel `0.22.0` успешно собран и проверен через public judge exports;
+- typed integration selector targeted tests: 28 passed;
+- canonical integration demo выбрал plan через selector `depth=0`;
+- wheel `0.23.0` успешно собран и проверен через public selector exports;
 - установленный `task-demo` успешно выполнил два atomic leaf вне дерева
   исходников;
 - для Python ниже 3.11 добавлена явная диагностическая ошибка при импорте.
@@ -394,13 +409,12 @@ MVP подтверждает архитектурную гипотезу: пол
 такого агента можно построить без повторного смешивания planner, tools,
 verification и stop logic.
 
-Версия `0.22.0` добавляет explicit lexicographic judge policy для ranking
-decomposition strategies. Comparison остаётся нейтральным измерителем, а judge
-применяется отдельным шагом к уже полученным metrics.
+Версия `0.23.0` добавляет typed structural selectors для reusable parent
+integration routes. Exact routes имеют приоритет, затем применяются ordered
+selectors и optional default.
 
-Policy задаёт eligibility и ordered min/max objectives. Ties сохраняются,
-ineligible outcomes не скрываются, а ranking report содержит измеренные values
-и причины каждого решения.
+Selectors работают по node-id prefix, depth и required capability. Metadata не
+имеет routing authority, а evidence сохраняет имя route и точный selector.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

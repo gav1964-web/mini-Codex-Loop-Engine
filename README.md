@@ -162,6 +162,7 @@ state = engine.run(definition)
 - strict automated release gate for the real sandbox backend;
 - bounded parent integration commands and status propagation;
 - external routing and all-of composition for parent integration checks;
+- typed structural selectors for reusable parent integration routes;
 - deterministic criteria judge;
 - atomic JSON checkpoint store.
 
@@ -170,20 +171,22 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.22.0` adds explicit lexicographic judge policies for decomposition
-strategy ranking. Comparison remains a neutral measurement layer; ranking is a
-separate operation over already measured runs.
+Version `0.23.0` adds typed structural selectors for reusable parent integration
+routes. Exact node routes retain priority, followed by explicitly ordered
+selector routes and then the optional default plan.
 
-Policies declare eligible root statuses and an ordered list of named `min`/`max`
-objectives. Equal objective tuples remain tied, while ineligible outcomes remain
-visible but unranked.
+Selectors support node-id prefixes, depth, and required capabilities. They read
+only scheduler-owned node fields; task metadata cannot create or override a
+match.
 
-Run comparison and ranking with:
+Run the typed integration example with:
 
 ```bash
-python -m examples.decomposition_strategy_compare
+python -m examples.integration_composition_demo
 ```
 
+The strategy comparison and ranking example remains available as
+`python -m examples.decomposition_strategy_compare`.
 The strict production sandbox gate remains available as
 `python -m tools.sandbox_release_gate`.
 For explicitly non-production validation, `--degraded-ok` permits an unavailable

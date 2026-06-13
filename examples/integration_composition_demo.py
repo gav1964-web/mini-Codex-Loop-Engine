@@ -12,6 +12,8 @@ from loop_engine.tasks import (
     InMemoryCapabilityResolver,
     IntegrationCompositionPolicy,
     IntegrationPlan,
+    IntegrationRoute,
+    IntegrationSelector,
     LeafExecutionResult,
     ScriptedTaskDecomposer,
     TaskGraph,
@@ -39,9 +41,13 @@ def main() -> int:
             "system": _check("system"),
         },
         IntegrationCompositionPolicy.create(
-            routes={
-                "root": IntegrationPlan.create(["contract", "system"])
-            }
+            selector_routes=[
+                IntegrationRoute(
+                    "root-depth",
+                    IntegrationSelector.depth(0),
+                    IntegrationPlan.create(["contract", "system"]),
+                )
+            ]
         ),
     )
     result = TaskScheduler(

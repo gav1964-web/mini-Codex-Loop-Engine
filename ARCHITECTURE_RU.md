@@ -607,6 +607,49 @@ python -m examples.integration_composition_demo
 Scheduler не получил routing или aggregation branches: он по-прежнему вызывает
 один `IntegrationVerifier` и применяет один structured result.
 
+### Typed Integration Selectors
+
+В `0.23.0` exact routes дополнены внешними ordered selector routes:
+
+```text
+completed parent
+  -> exact node.id route
+  -> first matching typed selector route
+  -> default plan
+  -> missing route block
+```
+
+`IntegrationRoute` содержит уникальное имя, `IntegrationSelector` и
+`IntegrationPlan`. Поддерживаются selector types:
+
+- `node_id_prefix`;
+- `depth`;
+- `required_capability`.
+
+Selectors читают только structural fields `TaskNode.id`, `depth` и
+`required_capabilities`. Metadata не участвует в matching и не может создать,
+отключить или переупорядочить route.
+
+Exact route всегда имеет приоритет над selectors. Selector routes проверяются в
+явном порядке policy, поэтому пересекающиеся selectors разрешаются
+детерминированно через first-match. Default применяется только после miss всех
+selectors.
+
+Policy копирует selector routes в immutable tuple, проверяет уникальность route
+names и типы selector/plan. Composite registry также проверяет verifier names во
+всех selector plans.
+
+Evidence содержит выбранный route и, для selector route, точные `kind` и
+`value`. Scheduler по-прежнему не знает о routing types: resolver полностью
+остаётся внутри реализации `IntegrationVerifier`.
+
+Канонический demo теперь выбирает root integration plan через selector
+`depth=0`:
+
+```bash
+python -m examples.integration_composition_demo
+```
+
 ### Bounded Parallel Leaves
 
 В `0.15.0` `TaskScheduler` может параллельно выполнять независимые ready leaves:
@@ -1143,8 +1186,8 @@ Loop Engine
 
 ## Следующий этап
 
-1. Typed selectors для integration routes помимо exact node id.
-2. Bounded retention/pruning policy для process registry service.
-3. Cross-process resource lease backend для нескольких scheduler processes.
-4. Composite release gate для pytest, wheel smoke и real sandbox.
-5. Measured latency/cost metrics для richer strategy judge policies.
+1. Bounded retention/pruning policy для process registry service.
+2. Cross-process resource lease backend для нескольких scheduler processes.
+3. Composite release gate для pytest, wheel smoke и real sandbox.
+4. Measured latency/cost metrics для richer strategy judge policies.
+5. Compound typed selectors с явным all/any composition.

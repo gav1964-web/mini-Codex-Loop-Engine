@@ -32,6 +32,8 @@ from .integration_composition import (
     CompositeIntegrationVerifier,
     IntegrationCompositionPolicy,
     IntegrationPlan,
+    IntegrationRoute,
+    IntegrationSelector,
 )
 from .plugin_acquisition import (
     GeneratedCapability,
@@ -94,6 +96,8 @@ __all__ = [
     "IntegrationCommandSpec",
     "IntegrationCompositionPolicy",
     "IntegrationPlan",
+    "IntegrationRoute",
+    "IntegrationSelector",
     "JsonTaskGraphStore",
     "LeafExecutionResult",
     "LexicographicStrategyJudge",

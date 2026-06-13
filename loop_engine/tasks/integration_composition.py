@@ -29,33 +29,135 @@ class IntegrationPlan:
 
 
 @dataclass(frozen=True, slots=True)
+class IntegrationSelector:
+    kind: str
+    value: str | int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, str):
+            raise TypeError("integration selector kind must be a string")
+        kind = self.kind.strip()
+        if kind not in {
+            "node_id_prefix",
+            "depth",
+            "required_capability",
+        }:
+            raise ValueError(f"unsupported integration selector kind: {kind}")
+        value: str | int = self.value
+        if kind == "depth":
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError("integration depth selector must be non-negative")
+        else:
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError("integration selector string value is required")
+            value = value.strip()
+        object.__setattr__(self, "kind", kind)
+        object.__setattr__(self, "value", value)
+
+    @classmethod
+    def node_id_prefix(cls, prefix: str) -> IntegrationSelector:
+        return cls(kind="node_id_prefix", value=prefix)
+
+    @classmethod
+    def depth(cls, depth: int) -> IntegrationSelector:
+        return cls(kind="depth", value=depth)
+
+    @classmethod
+    def required_capability(cls, capability: str) -> IntegrationSelector:
+        return cls(kind="required_capability", value=capability)
+
+    def matches(self, node: TaskNode) -> bool:
+        if self.kind == "node_id_prefix":
+            return node.id.startswith(str(self.value))
+        if self.kind == "depth":
+            return node.depth == self.value
+        if self.kind == "required_capability":
+            return self.value in node.required_capabilities
+        raise AssertionError(f"unhandled integration selector kind: {self.kind}")
+
+
+@dataclass(frozen=True, slots=True)
+class IntegrationRoute:
+    name: str
+    selector: IntegrationSelector
+    plan: IntegrationPlan
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str):
+            raise TypeError("integration selector route name must be a string")
+        name = self.name.strip()
+        if not name:
+            raise ValueError("integration selector route name is required")
+        if not isinstance(self.selector, IntegrationSelector):
+            raise TypeError("integration route selector must be IntegrationSelector")
+        if not isinstance(self.plan, IntegrationPlan):
+            raise TypeError("integration route plan must be IntegrationPlan")
+        object.__setattr__(self, "name", name)
+
+
+@dataclass(frozen=True, slots=True)
 class IntegrationCompositionPolicy:
     routes: Mapping[str, IntegrationPlan]
+    selector_routes: tuple[IntegrationRoute, ...] = ()
     default_plan: IntegrationPlan | None = None
+
+    def __post_init__(self) -> None:
+        normalized: dict[str, IntegrationPlan] = {}
+        for node_id, plan in self.routes.items():
+            key = node_id.strip()
+            if not key:
+                raise ValueError("integration route node id is required")
+            if key in normalized:
+                raise ValueError(f"duplicate integration route node id: {key}")
+            if not isinstance(plan, IntegrationPlan):
+                raise TypeError("integration routes must contain IntegrationPlan")
+            normalized[key] = plan
+        selector_routes = tuple(self.selector_routes)
+        if any(not isinstance(route, IntegrationRoute) for route in selector_routes):
+            raise TypeError("selector routes must contain IntegrationRoute")
+        names = [route.name for route in selector_routes]
+        if len(names) != len(set(names)):
+            raise ValueError("integration selector route names must be unique")
+        if self.default_plan is not None and not isinstance(
+            self.default_plan,
+            IntegrationPlan,
+        ):
+            raise TypeError("default integration plan must be IntegrationPlan")
+        if not normalized and not selector_routes and self.default_plan is None:
+            raise ValueError(
+                "at least one integration route, selector route, or default plan "
+                "is required"
+            )
+        object.__setattr__(self, "routes", MappingProxyType(normalized))
+        object.__setattr__(self, "selector_routes", selector_routes)
 
     @classmethod
     def create(
         cls,
         *,
         routes: dict[str, IntegrationPlan] | None = None,
+        selector_routes: list[IntegrationRoute] | tuple[IntegrationRoute, ...] = (),
         default_plan: IntegrationPlan | None = None,
     ) -> IntegrationCompositionPolicy:
-        normalized: dict[str, IntegrationPlan] = {}
-        for node_id, plan in (routes or {}).items():
-            key = node_id.strip()
-            if not key:
-                raise ValueError("integration route node id is required")
-            if not isinstance(plan, IntegrationPlan):
-                raise TypeError("integration routes must contain IntegrationPlan")
-            normalized[key] = plan
-        if default_plan is not None and not isinstance(default_plan, IntegrationPlan):
-            raise TypeError("default integration plan must be IntegrationPlan")
-        if not normalized and default_plan is None:
-            raise ValueError("at least one integration route or default plan is required")
         return cls(
-            routes=MappingProxyType(normalized),
+            routes=routes or {},
+            selector_routes=tuple(selector_routes),
             default_plan=default_plan,
         )
+
+    def resolve(
+        self,
+        node: TaskNode,
+    ) -> tuple[str, IntegrationPlan, IntegrationSelector | None] | None:
+        exact = self.routes.get(node.id)
+        if exact is not None:
+            return node.id, exact, None
+        for route in self.selector_routes:
+            if route.selector.matches(node):
+                return f"selector:{route.name}", route.plan, route.selector
+        if self.default_plan is not None:
+            return "default", self.default_plan, None
+        return None
 
 
 class CompositeIntegrationVerifier:
@@ -78,7 +180,11 @@ class CompositeIntegrationVerifier:
             raise ValueError("integration verifier registry must be non-empty")
         referenced = {
             name
-            for plan in [*policy.routes.values(), policy.default_plan]
+            for plan in [
+                *policy.routes.values(),
+                *(route.plan for route in policy.selector_routes),
+                policy.default_plan,
+            ]
             if plan is not None
             for name in plan.verifier_names
         }
@@ -97,14 +203,15 @@ class CompositeIntegrationVerifier:
                 error=child_error,
                 evidence=_child_evidence(node, graph),
             )
-        plan = self.policy.routes.get(node.id, self.policy.default_plan)
-        if plan is None:
+        resolution = self.policy.resolve(node)
+        if resolution is None:
             return LeafExecutionResult(
                 status="blocked",
                 summary="composite integration route is not configured",
                 error=f"integration_route_missing:{node.id}",
                 evidence=_child_evidence(node, graph),
             )
+        route_name, plan, selector = resolution
 
         checks: dict[str, dict[str, Any]] = {}
         results: list[tuple[str, LeafExecutionResult]] = []
@@ -143,7 +250,12 @@ class CompositeIntegrationVerifier:
 
         evidence = {
             **_child_evidence(node, graph),
-            "integration_route": node.id if node.id in self.policy.routes else "default",
+            "integration_route": route_name,
+            "integration_selector": (
+                {"kind": selector.kind, "value": selector.value}
+                if selector is not None
+                else None
+            ),
             "integration_plan": list(plan.verifier_names),
             "integration_checks": checks,
         }
