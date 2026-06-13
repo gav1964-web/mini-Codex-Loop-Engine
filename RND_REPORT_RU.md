@@ -59,6 +59,7 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - periodic subprocess heartbeat и terminal outcomes;
 - identity-safe stale process reaper;
 - bounded periodic process-reaper service;
+- persistent provider-neutral service-run reports;
 - bounded terminal-record retention policy;
 - command digest persistence без raw argv;
 - bounded parallel execution independent ready leaves;
@@ -508,6 +509,15 @@ Metadata не получила routing authority, а evidence сохраняет
 Полная регрессия также выявила Windows timing race в stale directory-lock
 fallback: mtime каталога теперь фиксируется до чтения отсутствующего
 `created_at`, поэтому recovery не зависит от побочных filesystem lookup.
+
+Версия `0.30.0` добавляет общий `ServiceRunReport` и typed sink boundary.
+Process reaper сохраняет versioned atomic operational reports с run identity,
+timestamps, cycle/reaping/pruning metrics и structured cycle details.
+
+JSON store проверяет path-safe identifiers, поддерживает bounded newest-first
+listing и возвращает immutable snapshots. Если явно настроенная persistence
+недоступна, service run завершается видимой ошибкой, а не теряет observability
+молча.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

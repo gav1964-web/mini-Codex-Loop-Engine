@@ -10,6 +10,7 @@ from loop_engine.adapters import (
     ProcessReaperService,
     ProcessRegistry,
     ProcessRetentionPolicy,
+    JsonServiceRunReportStore,
 )
 
 
@@ -56,12 +57,16 @@ def main() -> None:
         ),
         reaper=reap,
         clock=lambda: now[0],
+        report_store=JsonServiceRunReportStore("build/service_runs"),
     ).run()
     payload = {
         **asdict(report),
         "reaped_count": report.reaped_count,
         "final_record_status": registry.get(stale.record_id).status,
         "old_record_pruned": registry.get(old.record_id) is None,
+        "persisted_report": (
+            f"build/service_runs/process_reaper/{report.run_id}.json"
+        ),
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 

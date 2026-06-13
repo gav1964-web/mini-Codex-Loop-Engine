@@ -24,6 +24,10 @@ This project is a universal loop engine, not a coding-agent implementation.
   oldest-first. Running records must never be pruned.
 - A pruning failure must retain completed reaping evidence and fail the service
   report explicitly.
+- Bounded services may emit observability only through an explicit typed report
+  sink. Configured report persistence failures must fail the run visibly.
+- Service-run reports must use versioned atomic persistence, bounded listing,
+  path-safe identifiers, and must not contain raw process commands or secrets.
 - Persistent process registries must store command digests, not raw argv that may
   contain credentials.
 - Completion requires verifier evidence and a judge decision.

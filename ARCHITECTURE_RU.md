@@ -276,6 +276,49 @@ terminated запись и выполняет два bounded cycles:
 python -m examples.process_reaper_service_demo
 ```
 
+### Persistent Service-Run Observability
+
+В `0.30.0` bounded services получили общий provider-neutral контракт
+`ServiceRunReport`:
+
+```text
+bounded service
+  -> domain report
+  -> ServiceRunReport
+  -> ServiceRunReportSink
+  -> versioned atomic JSON
+```
+
+Общий report содержит:
+
+- path-safe `run_id` и `service`;
+- `status` и `stop_reason`;
+- start/finish timestamps и вычисляемую duration;
+- числовые operational metrics;
+- JSON-compatible structured details;
+- optional error.
+
+`JsonServiceRunReportStore` сохраняет envelope schema v1 по пути
+`<root>/<service>/<run_id>.json` через temporary file и atomic replace.
+Поддерживаются load и newest-first listing с limit от 1 до 100.
+Загруженные metrics/details являются immutable snapshots.
+
+`ProcessReaperService` зависит от `ServiceRunReportSink` protocol, а не от JSON
+store. Он публикует `cycle_count`, `reaped_count`, `terminated_count`,
+`lost_count`, `pruned_count` и полные cycle details. Raw argv не попадает в
+report: сохраняются только record ids и агрегаты.
+
+Report sink остаётся optional для backward compatibility. Но если sink явно
+настроен и persistence завершается ошибкой, returned service report становится
+`failed` с `service_report_persistence_error`; выполненные cycle evidence при
+этом сохраняются в памяти результата.
+
+Канонический demo пишет report в:
+
+```text
+build/service_runs/process_reaper/<run_id>.json
+```
+
 ## Первый Coding Profile
 
 Профиль `coding_check` выполняет одну заранее заданную verification command.
@@ -1424,7 +1467,6 @@ Loop Engine
 
 ## Следующий этап
 
-1. Persistent service-run reports и operational observability.
-2. Release-history comparison и regression trends.
-3. Optional fencing tokens для опасных resource adapters.
-4. Repeated-sample statistics для noisy latency measurements.
+1. Release-history comparison и regression trends.
+2. Optional fencing tokens для опасных resource adapters.
+3. Repeated-sample statistics для noisy latency measurements.

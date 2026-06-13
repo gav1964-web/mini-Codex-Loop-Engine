@@ -16,6 +16,11 @@ from .process_reaper_service import (
     ProcessRetentionPolicy,
     ReaperCycleReport,
 )
+from .service_reports import (
+    JsonServiceRunReportStore,
+    ServiceRunReport,
+    ServiceRunReportSink,
+)
 from .subprocesses import (
     BoundedSubprocessTool,
     SubprocessSpec,
@@ -39,6 +44,7 @@ __all__ = [
     "FileResourceLeaseManager",
     "FileResourceLeasePolicy",
     "LLMJSONDecodeError",
+    "JsonServiceRunReportStore",
     "OpenAICompatibleJSONClient",
     "PlanContractError",
     "ProcessRecord",
@@ -48,6 +54,8 @@ __all__ = [
     "ProcessRetentionPolicy",
     "ProcessRegistry",
     "ReaperCycleReport",
+    "ServiceRunReport",
+    "ServiceRunReportSink",
     "SubprocessSpec",
     "ToolRegistryExecutor",
     "ValidatedLLMPlanner",

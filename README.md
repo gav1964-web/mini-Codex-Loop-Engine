@@ -152,6 +152,7 @@ state = engine.run(definition)
 - bounded subprocess adapter to the standalone Plugin Generator;
 - owner/run-aware process registry with heartbeat and stale reaping;
 - bounded, interruptible service loop for periodic orphan reaping;
+- persistent versioned service-run reports with operational metrics;
 - bounded terminal-record retention and oldest-first registry pruning;
 - bounded parallel execution for explicitly admitted independent leaves;
 - immutable read/write resource claims for parallel workspace mutation;
@@ -177,20 +178,21 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.29.0` adds bounded compound expressions for typed integration
-selectors. `IntegrationSelectorGroup.all_of(...)` and `.any_of(...)` can be
-nested while retaining exact route, ordered first-match selector, and default
-plan precedence.
+Version `0.30.0` adds provider-neutral persistent service-run observability.
+`ServiceRunReport` carries a stable run identity, status, stop reason,
+timestamps, numeric metrics, structured details, and an optional error.
 
-Groups are immutable, reject empty or invalid children, and are limited to four
-group levels and sixteen total selector nodes. Matching still reads only
-admitted structural node fields; metadata remains outside routing authority.
-Evidence records the complete normalized selector expression.
+`JsonServiceRunReportStore` writes versioned reports atomically under
+`<root>/<service>/<run_id>.json`, validates path-safe identifiers, supports
+bounded newest-first listing, and reconstructs immutable report snapshots.
+`ProcessReaperService` accepts the generic `ServiceRunReportSink` protocol and
+publishes cycle, reaping, termination, loss, and pruning metrics. A configured
+sink failure makes the service run explicitly failed.
 
-Run the compound integration example with:
+Run the persistent service example with:
 
 ```bash
-python -m examples.integration_composition_demo
+python -m examples.process_reaper_service_demo
 ```
 
 The complete production gate remains `python -m tools.release_gate`.

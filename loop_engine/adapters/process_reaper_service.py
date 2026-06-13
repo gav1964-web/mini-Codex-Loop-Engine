@@ -5,10 +5,12 @@ from __future__ import annotations
 import threading
 import time
 import weakref
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Callable
+from uuid import uuid4
 
 from .process_registry import ProcessRecord, ProcessRegistry
+from .service_reports import ServiceRunReport, ServiceRunReportSink
 from .subprocesses import reap_stale_processes
 
 
@@ -75,6 +77,7 @@ class ReaperCycleReport:
 
 @dataclass(frozen=True, slots=True)
 class ProcessReaperReport:
+    run_id: str
     status: str
     stop_reason: str
     started_at: float
@@ -85,6 +88,27 @@ class ProcessReaperReport:
     @property
     def reaped_count(self) -> int:
         return sum(len(cycle.reaped_record_ids) for cycle in self.cycles)
+
+    def to_service_report(self) -> ServiceRunReport:
+        return ServiceRunReport(
+            run_id=self.run_id,
+            service="process_reaper",
+            status=self.status,
+            stop_reason=self.stop_reason,
+            started_at=self.started_at,
+            finished_at=self.finished_at,
+            metrics={
+                "cycle_count": len(self.cycles),
+                "reaped_count": self.reaped_count,
+                "terminated_count": sum(
+                    cycle.terminated_count for cycle in self.cycles
+                ),
+                "lost_count": sum(cycle.lost_count for cycle in self.cycles),
+                "pruned_count": sum(cycle.pruned_count for cycle in self.cycles),
+            },
+            details={"cycles": [asdict(cycle) for cycle in self.cycles]},
+            error=self.error,
+        )
 
 
 ReapFunction = Callable[[ProcessRegistry, float], list[ProcessRecord]]
@@ -107,12 +131,14 @@ class ProcessReaperService:
         reaper: ReapFunction | None = None,
         pruner: PruneFunction | None = None,
         clock: Callable[[], float] = time.time,
+        report_store: ServiceRunReportSink | None = None,
     ) -> None:
         self.registry = registry
         self.policy = policy
         self._reaper = reaper or _default_reaper
         self._pruner = pruner or _default_pruner
         self._clock = clock
+        self._report_store = report_store
         self._run_lock = _registry_run_lock(registry)
 
     def run(
@@ -123,6 +149,7 @@ class ProcessReaperService:
         if not self._run_lock.acquire(blocking=False):
             raise RuntimeError("process reaper service is already running")
         event = stop_event or threading.Event()
+        run_id = uuid4().hex
         started_at = self._clock()
         cycles: list[ReaperCycleReport] = []
         try:
@@ -130,6 +157,7 @@ class ProcessReaperService:
                 return self._report(
                     status="completed",
                     stop_reason="stop_requested",
+                    run_id=run_id,
                     started_at=started_at,
                     cycles=cycles,
                 )
@@ -150,6 +178,7 @@ class ProcessReaperService:
                     return self._report(
                         status="failed",
                         stop_reason="error",
+                        run_id=run_id,
                         started_at=started_at,
                         cycles=cycles,
                         error=f"{type(exc).__name__}: {exc}",
@@ -188,6 +217,7 @@ class ProcessReaperService:
                         return self._report(
                             status="failed",
                             stop_reason="error",
+                            run_id=run_id,
                             started_at=started_at,
                             cycles=cycles,
                             error=f"process_retention_error:{error}",
@@ -197,6 +227,7 @@ class ProcessReaperService:
                     return self._report(
                         status="completed",
                         stop_reason="max_cycles",
+                        run_id=run_id,
                         started_at=started_at,
                         cycles=cycles,
                     )
@@ -204,6 +235,7 @@ class ProcessReaperService:
                     return self._report(
                         status="completed",
                         stop_reason="stop_requested",
+                        run_id=run_id,
                         started_at=started_at,
                         cycles=cycles,
                     )
@@ -216,11 +248,13 @@ class ProcessReaperService:
         *,
         status: str,
         stop_reason: str,
+        run_id: str,
         started_at: float,
         cycles: list[ReaperCycleReport],
         error: str | None = None,
     ) -> ProcessReaperReport:
-        return ProcessReaperReport(
+        report = ProcessReaperReport(
+            run_id=run_id,
             status=status,
             stop_reason=stop_reason,
             started_at=started_at,
@@ -228,6 +262,24 @@ class ProcessReaperService:
             cycles=tuple(cycles),
             error=error,
         )
+        if self._report_store is None:
+            return report
+        try:
+            self._report_store.save(report.to_service_report())
+        except Exception as exc:
+            return ProcessReaperReport(
+                run_id=run_id,
+                status="failed",
+                stop_reason="error",
+                started_at=started_at,
+                finished_at=self._clock(),
+                cycles=tuple(cycles),
+                error=(
+                    "service_report_persistence_error:"
+                    f"{type(exc).__name__}: {exc}"
+                ),
+            )
+        return report
 
 
 def _default_reaper(
