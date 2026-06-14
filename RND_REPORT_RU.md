@@ -547,6 +547,15 @@ Repeated runs одной стратегии должны сохранять topo
 Behavioral drift отклоняется fail-closed и не маскируется статистическим
 усреднением.
 
+Версия `0.34.0` добавляет consolidation benchmark на изолированном реальном
+Python-проекте. Три стратегии читают исходник и тесты, применяют bounded change,
+запускают настоящий `unittest` и проходят integration verification.
+
+Staged strategies приобретают отсутствующую capability через существующий
+acquisition port. Parallel strategy обязана подтвердить фактическое пересечение
+независимых чтений. Versioned report объединяет comparison, external ranking и
+acceptance checks; benchmark не добавляет decision logic в scheduler.
+
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
 использовать idempotency key.

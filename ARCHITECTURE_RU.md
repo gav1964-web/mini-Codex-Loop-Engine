@@ -1118,6 +1118,51 @@ report — в `build/decomposition_ranking.json`. Оба остаются execut
 Выбранный reference baseline следует переносить в human-maintained документ, а
 не коммитить как полный run output.
 
+### Consolidation Benchmark
+
+В `0.34.0` добавлен первый реальный многошаговый benchmark, использующий
+публичные task runtime API без специальной ветки внутри scheduler:
+
+```text
+isolated Python fixture
+  -> inspect source + tests
+  -> acquire missing test-inspection capability
+  -> apply bounded source change
+  -> run real unittest suite
+  -> parent integration verification
+  -> repeated strategy comparison
+  -> external lexicographic ranking
+  -> versioned acceptance report
+```
+
+Сравниваются три decomposition strategy: `monolithic`,
+`sequential_staged` и `parallel_staged`. Последние две имеют одинаковую
+внешнюю cost estimate; различие latency определяется измеренным исполнением.
+Независимые source/test reads в parallel strategy должны реально пересекаться
+по monotonic intervals, а не считаться параллельными только по topology.
+
+Каждый sample получает отдельный temporary workspace. Benchmark выполняет
+настоящую запись Python-кода и запускает `unittest`, но не изменяет repository.
+После формирования immutable audit временные каталоги удаляются.
+
+Versioned report schema v1 объединяет:
+
+- существующий `StrategyComparison`;
+- существующий `StrategyRanking`;
+- явные acceptance checks для completion, real verification, capability
+  acquisition, observed parallelism и ожидаемого winner.
+
+Benchmark не получает decision authority над runtime. Cost model и judge policy
+остаются внешними, а output сохраняется только как ignored execution artifact:
+
+```bash
+python -m examples.consolidation_benchmark
+```
+
+```text
+build/consolidation_benchmark/report.json
+```
+
 ### Capability Acquisition
 
 ```text
@@ -1569,5 +1614,5 @@ Loop Engine
 
 ## Следующий этап
 
-1. Consolidation benchmark на реальной многошаговой задаче.
-2. Confidence-aware ranking поверх накопленных benchmark runs.
+1. Confidence-aware ranking поверх накопленных benchmark runs.
+2. Несколько независимых benchmark cases вместо одного Python-change fixture.

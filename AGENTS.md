@@ -81,6 +81,8 @@ This project is a universal loop engine, not a coding-agent implementation.
   count. `elapsed_ms` is the median; raw samples and MAD remain in evidence.
 - Repeated samples for one strategy must preserve topology and outcome or the
   comparison must fail closed.
+- Consolidation benchmarks must consume public runtime ports, use isolated
+  workspaces, verify real outcomes, and keep cost/ranking policy external.
 - Token and cost metrics must come from an explicit typed usage provider, never
   inferred from task metadata or hidden provider pricing.
 - Cost objectives require measured values with one comparable cost basis across

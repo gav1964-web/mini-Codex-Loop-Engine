@@ -163,6 +163,7 @@ state = engine.run(definition)
 - explicit lexicographic judge policies for decomposition strategy ranking;
 - measured latency and externally supplied token/cost strategy evidence;
 - bounded repeated latency samples with median and MAD evidence;
+- real isolated Python-project consolidation benchmark with acceptance checks;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
@@ -181,19 +182,21 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.33.0` adds bounded repeated-sample latency statistics for strategy
-comparison. `StrategySamplingPolicy` accepts an odd sample count from 1 to 21.
-The existing `elapsed_ms` metric is now the sample median, so judge policies
-remain compatible.
+Version `0.34.0` adds a consolidation benchmark that exercises the public task
+runtime on a real isolated Python project. It compares monolithic, sequential,
+and parallel decomposition strategies while performing actual file reads,
+a bounded source change, capability acquisition, resource-claim admission,
+`unittest` execution, parent integration verification, repeated sampling, and
+external policy-driven ranking.
 
-Comparison evidence also records raw samples, sample count, min, max, and
-median absolute deviation. Repeated runs must preserve topology and outcome;
-behavioral drift fails closed instead of mixing unrelated measurements.
+The versioned report combines comparison evidence, ranking, and explicit
+acceptance checks. Temporary workspaces are removed after every run; the report
+is written under ignored `build/` output.
 
-Run the sampled comparison with:
+Run it with:
 
 ```bash
-python -m examples.decomposition_strategy_compare
+python -m examples.consolidation_benchmark
 ```
 
 The complete production gate remains `python -m tools.release_gate`.
