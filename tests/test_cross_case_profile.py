@@ -7,16 +7,12 @@ import sys
 import pytest
 
 from loop_engine.benchmarks import (
-    BenchmarkConfidenceAnalyzer,
     BenchmarkConfidencePolicy,
+    BenchmarkConfidenceReport,
     CrossCaseProfileAnalyzer,
     CrossCaseProfilePolicy,
-    JsonBenchmarkHistoryStore,
+    StrategyConfidence,
     load_benchmark_confidence,
-    run_consolidation_benchmark,
-    run_project_audit_benchmark,
-    run_resource_recovery_benchmark,
-    run_retryable_side_effect_benchmark,
     write_benchmark_confidence,
     write_cross_case_profile,
 )
@@ -47,48 +43,43 @@ _MAPPINGS = {
 
 
 @pytest.fixture(scope="module")
-def confidence_reports(tmp_path_factory):
-    root = tmp_path_factory.mktemp("cross-case")
-    change = run_consolidation_benchmark(
-        root / "change.json",
-        sample_count=1,
-        read_delay_seconds=0.04,
-    )
-    audit = run_project_audit_benchmark(
-        root / "audit.json",
-        sample_count=1,
-        read_delay_seconds=0.04,
-    )
-    recovery = run_resource_recovery_benchmark(
-        root / "recovery.json",
-        sample_count=1,
-        operation_delay_seconds=0.02,
-    )
-    retry = run_retryable_side_effect_benchmark(
-        root / "retry.json",
-        sample_count=1,
-        operation_delay_seconds=0.02,
-    )
+def confidence_reports():
     policy = BenchmarkConfidencePolicy(minimum_runs=2)
 
-    def confidence(name, report):
-        store = JsonBenchmarkHistoryStore(root / name)
-        entries = tuple(
-            store.record(
-                report,
-                run_id=f"{name}-{index}",
-                recorded_at=float(index),
+    def confidence(case):
+        by_role = {
+            role: strategy
+            for strategy, role in _MAPPINGS[case].items()
+        }
+        strategies = tuple(
+            StrategyConfidence(
+                strategy=by_role[role],
+                first_place_count=2 if rank == 1 else 0,
+                first_place_share_basis_points=10000 if rank == 1 else 0,
+                rank_sum=rank * 2,
+                average_rank_millis=rank * 1000,
+                median_elapsed_ms=rank * 10,
+                elapsed_mad_ms=0,
             )
-            for index in range(2)
+            for rank, role in enumerate(
+                ("parallel", "sequential", "monolithic"),
+                start=1,
+            )
         )
-        return BenchmarkConfidenceAnalyzer(policy).analyze(entries)
+        return BenchmarkConfidenceReport(
+            status="confident",
+            benchmark=case,
+            case=case,
+            run_ids=(f"{case}-0", f"{case}-1"),
+            passed_run_count=2,
+            consensus_winners=(by_role["parallel"],),
+            winner_share_basis_points=10000,
+            policy=policy,
+            strategies=strategies,
+            reason="deterministic test confidence fixture",
+        )
 
-    return (
-        confidence("change", change),
-        confidence("audit", audit),
-        confidence("recovery", recovery),
-        confidence("retry", retry),
-    )
+    return tuple(confidence(case) for case in _MAPPINGS)
 
 
 def test_cross_case_profile_finds_parallel_role_consensus(

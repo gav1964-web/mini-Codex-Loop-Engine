@@ -29,6 +29,10 @@ from .models import (
     BenchmarkReport,
     ConsolidationBenchmarkReport,
 )
+from .multiprocess_contention import (
+    MultiprocessContentionReport,
+    run_multiprocess_contention_benchmark,
+)
 from .project_audit import run_project_audit_benchmark
 from .resource_recovery import run_resource_recovery_benchmark
 from .retryable_side_effect import run_retryable_side_effect_benchmark
@@ -47,10 +51,12 @@ __all__ = [
     "CrossCaseProfilePolicy",
     "CrossCaseProfileReport",
     "JsonBenchmarkHistoryStore",
+    "MultiprocessContentionReport",
     "StrategyConfidence",
     "StrategyRoleProfile",
     "load_benchmark_confidence",
     "run_consolidation_benchmark",
+    "run_multiprocess_contention_benchmark",
     "run_project_audit_benchmark",
     "run_resource_recovery_benchmark",
     "run_retryable_side_effect_benchmark",

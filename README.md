@@ -187,6 +187,21 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
+Version `0.42.0` adds secret-safe retry telemetry and a real spawned-process
+lease-contention benchmark. `aggregate_retry_telemetry` derives bounded counts,
+retry codes, rejection reasons, and delay/jitter totals from task events while
+ignoring idempotency keys and arbitrary payload fields.
+
+The benchmark starts two independent scheduler processes against one
+`FileResourceLeaseManager` registry. Scheduler B begins acquisition only after
+scheduler A confirms that the shared write lease is held. It verifies an
+observed contention retry, deterministic seed divergence, non-overlapping write
+execution, deadline-bounded completion, and terminal worker cleanup:
+
+```bash
+python -m examples.multiprocess_contention_benchmark
+```
+
 Version `0.41.0` adds a persistent elapsed-time retry deadline and deterministic
 jitter. `TaskRetryPolicy.max_retry_elapsed_seconds` bounds the complete retry
 window across waits, executions, checkpoints, and process resume. An injected

@@ -73,6 +73,7 @@ from .retry import (
     SystemRetryClock,
     TaskRetryPolicy,
 )
+from .retry_telemetry import RetryTelemetry, aggregate_retry_telemetry
 from .replay import (
     DecompositionStrategyRunner,
     DecompositionTrace,
@@ -148,6 +149,7 @@ __all__ = [
     "RetryClock",
     "RetryDecision",
     "RetryWaiter",
+    "RetryTelemetry",
     "run_fenced_operation",
     "SandboxMount",
     "ScriptedTaskDecomposer",
@@ -172,6 +174,7 @@ __all__ = [
     "ValidatedLLMTaskDecomposer",
     "WslBubblewrapSandbox",
     "build_task_demo",
+    "aggregate_retry_telemetry",
     "decomposition_context_sha256",
     "strategy_metrics",
 ]
