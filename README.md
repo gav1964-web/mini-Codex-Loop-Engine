@@ -162,6 +162,7 @@ state = engine.run(definition)
 - context-bound decomposition replay and strategy comparison;
 - explicit lexicographic judge policies for decomposition strategy ranking;
 - measured latency and externally supplied token/cost strategy evidence;
+- bounded repeated latency samples with median and MAD evidence;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
@@ -180,20 +181,19 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.32.0` adds persistent monotonic fencing tokens for write-resource
-leases. The schema-v3 lease registry retains per-resource counters after
-release, expiry, and owner recovery. Renewing a lease preserves its token;
-reacquiring the same write resource receives a strictly greater token.
+Version `0.33.0` adds bounded repeated-sample latency statistics for strategy
+comparison. `StrategySamplingPolicy` accepts an odd sample count from 1 to 21.
+The existing `elapsed_ms` metric is now the sample median, so judge policies
+remain compatible.
 
-`run_fenced_operation` passes the token to a typed `FencedResourceAdapter`.
-Fencing is guaranteed only when that adapter atomically validates the token at
-the side-effect boundary. Read leases do not receive tokens, and schema-v2
-registries fail closed instead of resetting counter history.
+Comparison evidence also records raw samples, sample count, min, max, and
+median absolute deviation. Repeated runs must preserve topology and outcome;
+behavioral drift fails closed instead of mixing unrelated measurements.
 
-Run the fencing demonstration with:
+Run the sampled comparison with:
 
 ```bash
-python -m examples.resource_leases_demo
+python -m examples.decomposition_strategy_compare
 ```
 
 The complete production gate remains `python -m tools.release_gate`.

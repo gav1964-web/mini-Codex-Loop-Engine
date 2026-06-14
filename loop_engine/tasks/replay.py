@@ -29,7 +29,7 @@ from .strategy_metrics import (
 )
 
 DECOMPOSITION_TRACE_SCHEMA_VERSION = 1
-STRATEGY_COMPARISON_SCHEMA_VERSION = 2
+STRATEGY_COMPARISON_SCHEMA_VERSION = 3
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -173,10 +173,12 @@ class DecompositionStrategyRunner:
         *,
         usage_provider: StrategyUsageProvider | None = None,
         clock: Callable[[], float] = perf_counter,
+        sampling_policy: StrategySamplingPolicy | None = None,
     ) -> None:
         self.scheduler_factory = scheduler_factory
         self.usage_provider = usage_provider
         self.clock = clock
+        self.sampling_policy = sampling_policy or StrategySamplingPolicy()
 
     def compare(
         self,
@@ -190,20 +192,34 @@ class DecompositionStrategyRunner:
             strategy_name = name.strip()
             if not strategy_name:
                 raise ValueError("strategy names must be non-empty")
-            graph = case.create_graph(
-                graph_id=_stable_graph_id(case.name, strategy_name)
-            )
-            started = self.clock()
-            result = self.scheduler_factory(strategies[name]()).run(graph)
-            elapsed_seconds = self.clock() - started
-            if elapsed_seconds < 0:
-                raise ValueError("strategy measurement clock moved backwards")
-            elapsed_ms = round(elapsed_seconds * 1000)
+            samples: list[StrategyMetrics] = []
+            result: TaskGraph | None = None
+            for _ in range(self.sampling_policy.sample_count):
+                graph = case.create_graph(
+                    graph_id=_stable_graph_id(case.name, strategy_name)
+                )
+                started = self.clock()
+                result = self.scheduler_factory(strategies[name]()).run(graph)
+                elapsed_seconds = self.clock() - started
+                if elapsed_seconds < 0:
+                    raise ValueError("strategy measurement clock moved backwards")
+                samples.append(
+                    strategy_metrics(
+                        strategy_name,
+                        case.name,
+                        result,
+                        elapsed_ms=round(elapsed_seconds * 1000),
+                    )
+                )
+            _validate_repeated_samples(strategy_name, samples)
+            assert result is not None
             metrics = strategy_metrics(
                 strategy_name,
                 case.name,
                 result,
-                elapsed_ms=elapsed_ms,
+                elapsed_samples_ms=tuple(
+                    sample.elapsed_ms for sample in samples
+                ),
             )
             usage = (
                 self.usage_provider.measure(
@@ -222,6 +238,37 @@ class DecompositionStrategyRunner:
             runs=tuple(runs),
             topology_groups=_group_runs(runs, "topology_sha256"),
             outcome_groups=_group_runs(runs, "outcome_sha256"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class StrategySamplingPolicy:
+    sample_count: int = 1
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.sample_count, int)
+            or isinstance(self.sample_count, bool)
+            or self.sample_count <= 0
+            or self.sample_count > 21
+            or self.sample_count % 2 == 0
+        ):
+            raise ValueError(
+                "strategy sample_count must be odd and between 1 and 21"
+            )
+
+
+def _validate_repeated_samples(
+    strategy: str,
+    samples: list[StrategyMetrics],
+) -> None:
+    if len({sample.topology_sha256 for sample in samples}) > 1:
+        raise ValueError(
+            f"strategy repeated samples changed topology:{strategy}"
+        )
+    if len({sample.outcome_sha256 for sample in samples}) > 1:
+        raise ValueError(
+            f"strategy repeated samples changed outcome:{strategy}"
         )
 
 

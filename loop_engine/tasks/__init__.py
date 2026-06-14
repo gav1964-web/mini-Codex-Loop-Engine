@@ -73,6 +73,7 @@ from .replay import (
     RecordingTaskDecomposer,
     ReplayTaskCase,
     StrategyComparison,
+    StrategySamplingPolicy,
     decomposition_context_sha256,
 )
 from .strategy_metrics import (
@@ -146,6 +147,7 @@ __all__ = [
     "TaskSchedulerPolicy",
     "TaskStatus",
     "StrategyComparison",
+    "StrategySamplingPolicy",
     "StrategyJudgePolicy",
     "StrategyMetrics",
     "StrategyUsage",

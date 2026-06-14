@@ -62,6 +62,7 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - persistent provider-neutral service-run reports;
 - persistent release history и bounded regression trends;
 - persistent monotonic fencing tokens для write-resource adapters;
+- bounded repeated latency samples с median и MAD;
 - bounded terminal-record retention policy;
 - command digest persistence без raw argv;
 - bounded parallel execution independent ready leaves;
@@ -537,6 +538,14 @@ Trend CLI работает analyze-only по умолчанию, поэтому 
 Typed `FencedResourceAdapter` обязан атомарно проверить token вместе с side
 effect. Demo подтверждает отказ старому token после reacquire. Schema v2
 отклоняется fail-closed, чтобы неизвестная история не была случайно обнулена.
+
+Версия `0.33.0` добавляет `StrategySamplingPolicy` с нечётным bounded sample
+count. `elapsed_ms` теперь является median, а raw samples, min/max и MAD
+сохраняются как evidence.
+
+Repeated runs одной стратегии должны сохранять topology и outcome fingerprints.
+Behavioral drift отклоняется fail-closed и не маскируется статистическим
+усреднением.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

@@ -287,7 +287,7 @@ def test_strategy_comparison_saves_versioned_json(tmp_path) -> None:
     comparison.save(path)
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert payload["case"] == "report"
     assert payload["topology_diverged"] is False
     assert payload["runs"][0]["strategy"] == "atomic"

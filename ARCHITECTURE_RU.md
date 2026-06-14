@@ -1090,6 +1090,29 @@ Timing и usage не входят в topology/outcome fingerprints. Повтор
 же graph с другой latency или ценой остаётся topology/outcome equivalent, но
 может получить другой rank только по явно выбранной внешней policy.
 
+В `0.33.0` comparison schema v3 добавляет bounded repeated latency samples.
+`StrategySamplingPolicy.sample_count` обязан быть нечётным числом от 1 до 21.
+Для каждой стратегии runner создаёт fresh graph и заново запускает scheduler
+указанное число раз.
+
+`StrategyMetrics` теперь сохраняет:
+
+- `elapsed_samples_ms`;
+- `elapsed_sample_count`;
+- `elapsed_min_ms`;
+- `elapsed_max_ms`;
+- `elapsed_mad_ms`;
+- `elapsed_ms` как median samples.
+
+Median сохраняет backward compatibility judge policy и снижает влияние
+одиночного timing outlier. MAD показывает устойчивый разброс без введения
+floating-point score в ranking contract.
+
+Повторные samples обязаны иметь одинаковые topology и outcome fingerprints.
+Если стратегия между samples меняет decomposition или terminal behavior,
+comparison fail-closed завершается ошибкой. Usage provider вызывается один раз
+после structural validation и не может переписать уже captured metrics.
+
 Нейтральный report сохраняется в `build/decomposition_comparison.json`, ranking
 report — в `build/decomposition_ranking.json`. Оба остаются execution artifacts.
 Выбранный reference baseline следует переносить в human-maintained документ, а
@@ -1546,4 +1569,5 @@ Loop Engine
 
 ## Следующий этап
 
-1. Repeated-sample statistics для noisy latency measurements.
+1. Consolidation benchmark на реальной многошаговой задаче.
+2. Confidence-aware ranking поверх накопленных benchmark runs.

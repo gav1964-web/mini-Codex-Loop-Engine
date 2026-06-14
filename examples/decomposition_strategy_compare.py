@@ -19,6 +19,7 @@ from loop_engine.tasks import (
     ScriptedTaskDecomposer,
     StrategyJudgePolicy,
     StrategyObjective,
+    StrategySamplingPolicy,
     StrategyUsage,
     TaskScheduler,
 )
@@ -98,6 +99,7 @@ def main() -> int:
     comparison = DecompositionStrategyRunner(
         _scheduler,
         usage_provider=_DemoUsage(),
+        sampling_policy=StrategySamplingPolicy(sample_count=3),
     ).compare(
         ReplayTaskCase(
             name="inspect-apply-verify",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import statistics
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from typing import Protocol
@@ -80,6 +81,11 @@ class StrategyMetrics:
     topology_sha256: str
     outcome_sha256: str
     elapsed_ms: int = 0
+    elapsed_sample_count: int | None = None
+    elapsed_samples_ms: tuple[int, ...] = ()
+    elapsed_min_ms: int | None = None
+    elapsed_max_ms: int | None = None
+    elapsed_mad_ms: int | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
     total_tokens: int | None = None
@@ -88,6 +94,39 @@ class StrategyMetrics:
 
     def __post_init__(self) -> None:
         _validate_counter("elapsed_ms", self.elapsed_ms, optional=False)
+        samples = tuple(self.elapsed_samples_ms) or (self.elapsed_ms,)
+        if len(samples) % 2 == 0:
+            raise ValueError("strategy latency sample count must be odd")
+        for sample in samples:
+            _validate_counter("elapsed sample", sample, optional=False)
+        median = int(statistics.median(samples))
+        minimum = min(samples)
+        maximum = max(samples)
+        mad = int(
+            statistics.median(
+                abs(sample - median) for sample in samples
+            )
+        )
+        expected = {
+            "elapsed_ms": median,
+            "elapsed_sample_count": len(samples),
+            "elapsed_min_ms": minimum,
+            "elapsed_max_ms": maximum,
+            "elapsed_mad_ms": mad,
+        }
+        if self.elapsed_ms != median:
+            raise ValueError("strategy elapsed_ms must equal sample median")
+        for name in (
+            "elapsed_sample_count",
+            "elapsed_min_ms",
+            "elapsed_max_ms",
+            "elapsed_mad_ms",
+        ):
+            value = getattr(self, name)
+            if value is not None and value != expected[name]:
+                raise ValueError(f"strategy {name} does not match samples")
+            object.__setattr__(self, name, expected[name])
+        object.__setattr__(self, "elapsed_samples_ms", samples)
         for name in (
             "input_tokens",
             "output_tokens",
@@ -121,12 +160,19 @@ def strategy_metrics(
     graph: TaskGraph,
     *,
     elapsed_ms: int = 0,
+    elapsed_samples_ms: tuple[int, ...] | None = None,
     usage: StrategyUsage | None = None,
 ) -> StrategyMetrics:
+    samples = tuple(elapsed_samples_ms or (elapsed_ms,))
+    if len(samples) % 2 == 0:
+        raise ValueError("strategy latency sample count must be odd")
+    for sample in samples:
+        _validate_counter("elapsed sample", sample, optional=False)
+    median_elapsed_ms = int(statistics.median(samples))
     if (
-        not isinstance(elapsed_ms, int)
-        or isinstance(elapsed_ms, bool)
-        or elapsed_ms < 0
+        not isinstance(median_elapsed_ms, int)
+        or isinstance(median_elapsed_ms, bool)
+        or median_elapsed_ms < 0
     ):
         raise ValueError("strategy elapsed_ms must be a non-negative integer")
     if usage is not None and not isinstance(usage, StrategyUsage):
@@ -175,7 +221,8 @@ def strategy_metrics(
         ),
         topology_sha256=_sha256(topology),
         outcome_sha256=_sha256(outcomes),
-        elapsed_ms=elapsed_ms,
+        elapsed_ms=median_elapsed_ms,
+        elapsed_samples_ms=samples,
         input_tokens=usage.input_tokens if usage is not None else None,
         output_tokens=usage.output_tokens if usage is not None else None,
         total_tokens=(

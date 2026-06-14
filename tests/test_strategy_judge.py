@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -276,3 +277,11 @@ def test_direct_metrics_construction_validates_measurement_shape() -> None:
         _metrics("partial", input_tokens=1)
     with pytest.raises(ValueError, match="cost and cost_basis"):
         _metrics("cost", cost=1)
+    with pytest.raises(ValueError, match="sample count must be odd"):
+        replace(_metrics("samples"), elapsed_samples_ms=(1, 2))
+    with pytest.raises(ValueError, match="must equal sample median"):
+        replace(
+            _metrics("median"),
+            elapsed_ms=1,
+            elapsed_samples_ms=(1, 2, 3),
+        )
