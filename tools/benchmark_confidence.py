@@ -12,12 +12,14 @@ from loop_engine.benchmarks import (
     JsonBenchmarkHistoryStore,
     run_consolidation_benchmark,
     run_project_audit_benchmark,
+    run_resource_recovery_benchmark,
     write_benchmark_confidence,
 )
 
 _RUNNERS = {
     "python-project-change": run_consolidation_benchmark,
     "python-project-audit": run_project_audit_benchmark,
+    "resource-contention-recovery": run_resource_recovery_benchmark,
 }
 
 

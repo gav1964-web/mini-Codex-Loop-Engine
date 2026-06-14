@@ -167,6 +167,7 @@ state = engine.run(definition)
 - independent read-only project-audit benchmark with parallel evidence gathering;
 - immutable benchmark history with confidence-aware consensus ranking;
 - cross-case strategy-role profiles over independent confidence reports;
+- interruption recovery benchmark with conflicting write-resource claims;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
@@ -185,27 +186,27 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.37.0` adds cross-case strategy profiles. Each benchmark first
-produces its own confidence report. An external immutable mapping then assigns
-case-specific strategy names to common roles: `monolithic`, `sequential`, and
-`parallel`.
+Version `0.38.0` adds `resource-contention-recovery`, a stress benchmark for
+at-least-once task recovery. It simulates process interruption after a leaf has
+been persisted as running, reloads the graph through `JsonTaskGraphStore`, and
+continues with a new scheduler instance.
 
-The analyzer compares only ordinal role placement and case wins. It never sums
-latency, cost, tokens, or raw ranks across incompatible judge policies. Every
-source case must be independently confident before the cross-case report can be
-confident.
+The staged strategies preserve completed leaves, retry only the interrupted
+leaf, allow independent inspection to overlap with the first write, and keep
+two writes to the same resource serialized. The benchmark verifies the final
+`AB` state and requires exactly one recovery marker per run.
 
-Build the two confidence reports and the profile with:
+Run it directly or through confidence history:
 
 ```bash
-python -m tools.benchmark_confidence --run --case python-project-change
-python -m tools.benchmark_confidence --run --case python-project-audit
+python -m examples.resource_recovery_benchmark
+python -m tools.benchmark_confidence --run --case resource-contention-recovery
 python -m tools.cross_case_profile
 ```
 
-The current two-case evidence selects the `parallel` role in both cases. This is
-a measured profile of the admitted benchmark suite, not a universal rule that
-parallel decomposition is always preferable.
+The current three-case profile selects the `parallel` role in all three cases.
+This means admitted independent work helped while conflicting writes remained
+serialized; it is not a rule to execute conflicting mutations concurrently.
 
 The complete production gate remains `python -m tools.release_gate`.
 

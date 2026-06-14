@@ -1332,6 +1332,64 @@ Artifact:
 build/benchmarks/cross_case_profile.json
 ```
 
+### Resource Contention и Interrupted Recovery Benchmark
+
+В `0.38.0` добавлен stress case `resource-contention-recovery`:
+
+```text
+inspect initial state
+  + write A on shared resource
+  -> write B starts
+  -> graph persisted with write B = running
+  -> simulated process interruption
+  -> JsonTaskGraphStore.load()
+  -> running becomes ready with recovery marker
+  -> new scheduler resumes write B
+  -> parent verifies final AB state
+```
+
+Benchmark использует `SystemExit` как границу process interruption, потому что
+обычный `Exception` leaf executor переводится scheduler-ом в terminal failed.
+Это соответствует существующему контракту: recovery поддерживает interrupted
+`running` work, но не превращает произвольный failed task в retryable.
+
+Acceptance checks требуют:
+
+- каждая strategy восстанавливается и получает финальный state `AB`;
+- на isolated run происходит ровно одно interruption;
+- сохраняется один `recovered_after_interrupted_leaf_execution`;
+- уже completed staged leaves не исполняются повторно;
+- конфликтующие write-A/write-B никогда не пересекаются;
+- independent inspect/write-A пересекаются только в parallel strategy;
+- external judge выбирает `parallel_recovery`.
+
+Сравниваются:
+
+- `monolithic`;
+- `sequential_recovery`;
+- `parallel_recovery`.
+
+Resource claims остаются внешней immutable policy. Parallel advantage здесь
+означает overlap только независимой работы; shared writes scheduler
+сериализует.
+
+После трёх independent runs recovery case получил confident consensus. Общий
+cross-case profile теперь содержит три workload:
+
+```text
+parallel:   3 case wins, ordinal sum 3
+sequential: 0 case wins, ordinal sum 6
+monolithic: 0 case wins, ordinal sum 9
+```
+
+CLI:
+
+```bash
+python -m examples.resource_recovery_benchmark
+python -m tools.benchmark_confidence --run --case resource-contention-recovery
+python -m tools.cross_case_profile
+```
+
 ### Capability Acquisition
 
 ```text
@@ -1783,6 +1841,6 @@ Loop Engine
 
 ## Следующий этап
 
-1. Добавить benchmark case с resource contention или частичным failure.
-2. Проверить, сохраняется ли преимущество parallel role при конфликтующих
-   resource claims и recovery.
+1. Добавить retry policy для явно retryable failed leaves, отдельно от
+   interrupted-running recovery.
+2. Проверить idempotency keys и bounded retry budget на side-effecting leaves.

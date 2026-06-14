@@ -92,6 +92,9 @@ This project is a universal loop engine, not a coding-agent implementation.
   never raw case-specific rank or policy values.
 - Cross-case role mappings must be explicit immutable policy. A measured role
   winner must never become an implicit scheduler routing rule.
+- Interrupted-running recovery and retryable terminal failure are separate
+  contracts. Benchmarks and runtime code must not silently treat failed leaves
+  as resumable without an explicit retry policy and budget.
 - Token and cost metrics must come from an explicit typed usage provider, never
   inferred from task metadata or hidden provider pricing.
 - Cost objectives require measured values with one comparable cost basis across

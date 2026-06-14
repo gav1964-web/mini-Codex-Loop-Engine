@@ -24,6 +24,11 @@ _ROLE_MAPPINGS = {
         "sequential_evidence": "sequential",
         "parallel_evidence": "parallel",
     },
+    "resource-contention-recovery": {
+        "monolithic": "monolithic",
+        "sequential_recovery": "sequential",
+        "parallel_recovery": "parallel",
+    },
 }
 
 
@@ -44,6 +49,13 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--recovery-confidence",
+        type=Path,
+        default=Path(
+            "build/benchmarks/resource-contention-recovery/confidence.json"
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("build/benchmarks/cross_case_profile.json"),
@@ -57,11 +69,12 @@ def main() -> int:
     reports = (
         load_benchmark_confidence(args.change_confidence),
         load_benchmark_confidence(args.audit_confidence),
+        load_benchmark_confidence(args.recovery_confidence),
     )
     profile = CrossCaseProfileAnalyzer(
         CrossCaseProfilePolicy(
             role_mappings=_ROLE_MAPPINGS,
-            minimum_cases=2,
+            minimum_cases=3,
             minimum_winner_share_basis_points=(
                 args.minimum_winner_share_bp
             ),

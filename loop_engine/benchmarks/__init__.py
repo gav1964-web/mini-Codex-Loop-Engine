@@ -30,6 +30,7 @@ from .models import (
     ConsolidationBenchmarkReport,
 )
 from .project_audit import run_project_audit_benchmark
+from .resource_recovery import run_resource_recovery_benchmark
 
 __all__ = [
     "BenchmarkAcceptanceCheck",
@@ -50,6 +51,7 @@ __all__ = [
     "load_benchmark_confidence",
     "run_consolidation_benchmark",
     "run_project_audit_benchmark",
+    "run_resource_recovery_benchmark",
     "write_benchmark_confidence",
     "write_cross_case_profile",
 ]

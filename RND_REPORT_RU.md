@@ -578,8 +578,18 @@ pyproject, capability acquisition и integration child evidence.
 confidence reports и сравнивает ordinal placement и case wins.
 
 Latency, cost и case-specific judge values между workload не складываются.
-На текущих двух case роль `parallel` получила 2 из 2 побед и confident profile.
+На первых двух case роль `parallel` получила 2 из 2 побед и confident profile.
 Это наблюдение benchmark suite, а не встроенная routing policy.
+
+Версия `0.38.0` добавляет stress case с conflicting write claims и
+process-interruption recovery. Running leaf сохраняется, загрузка переводит его
+в ready, новый scheduler завершает только прерванную работу, не повторяя
+completed leaves.
+
+Benchmark подтверждает сериализацию shared writes и параллельность только
+независимого inspect. После трёх independent runs общий profile даёт роли
+`parallel` 3 из 3 case wins. Terminal failed retry при этом сознательно не
+добавлен и остаётся следующим отдельным контрактом.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

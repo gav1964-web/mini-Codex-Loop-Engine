@@ -15,6 +15,7 @@ from loop_engine.benchmarks import (
     load_benchmark_confidence,
     run_consolidation_benchmark,
     run_project_audit_benchmark,
+    run_resource_recovery_benchmark,
     write_benchmark_confidence,
     write_cross_case_profile,
 )
@@ -30,6 +31,11 @@ _MAPPINGS = {
         "monolithic": "monolithic",
         "sequential_evidence": "sequential",
         "parallel_evidence": "parallel",
+    },
+    "resource-contention-recovery": {
+        "monolithic": "monolithic",
+        "sequential_recovery": "sequential",
+        "parallel_recovery": "parallel",
     },
 }
 
@@ -47,6 +53,11 @@ def confidence_reports(tmp_path_factory):
         sample_count=1,
         read_delay_seconds=0.04,
     )
+    recovery = run_resource_recovery_benchmark(
+        root / "recovery.json",
+        sample_count=1,
+        operation_delay_seconds=0.02,
+    )
     policy = BenchmarkConfidencePolicy(minimum_runs=2)
 
     def confidence(name, report):
@@ -61,7 +72,11 @@ def confidence_reports(tmp_path_factory):
         )
         return BenchmarkConfidenceAnalyzer(policy).analyze(entries)
 
-    return confidence("change", change), confidence("audit", audit)
+    return (
+        confidence("change", change),
+        confidence("audit", audit),
+        confidence("recovery", recovery),
+    )
 
 
 def test_cross_case_profile_finds_parallel_role_consensus(
@@ -75,17 +90,19 @@ def test_cross_case_profile_finds_parallel_role_consensus(
     assert profile.consensus_roles == ("parallel",)
     assert profile.winner_share_basis_points == 10000
     assert profile.profiles[0].role == "parallel"
-    assert profile.profiles[0].case_wins == 2
+    assert profile.profiles[0].case_wins == 3
     assert {case.case for case in profile.cases} == set(_MAPPINGS)
 
 
 def test_cross_case_profile_requires_confident_sources(
     confidence_reports,
 ) -> None:
-    change, audit = confidence_reports
+    change, audit, recovery = confidence_reports
     profile = CrossCaseProfileAnalyzer(
         CrossCaseProfilePolicy(role_mappings=_MAPPINGS)
-    ).analyze((replace(change, status="low_confidence"), audit))
+    ).analyze(
+        (replace(change, status="low_confidence"), audit, recovery)
+    )
 
     assert profile.status == "low_confidence"
     assert profile.reason == "one or more source cases are not confident"
@@ -133,6 +150,13 @@ def test_cross_case_json_loading_writing_and_cli(
             str(change_path),
             "--audit-confidence",
             str(audit_path),
+            "--recovery-confidence",
+            str(
+                write_benchmark_confidence(
+                    tmp_path / "recovery.json",
+                    confidence_reports[2],
+                )
+            ),
             "--output",
             str(output),
         ],
