@@ -1,6 +1,17 @@
 """Reusable end-to-end benchmarks for Loop Engine architecture."""
 
 from .consolidation import run_consolidation_benchmark
+from .cross_case import (
+    CrossCaseProfileAnalyzer,
+    load_benchmark_confidence,
+    write_cross_case_profile,
+)
+from .cross_case_models import (
+    CaseRoleResult,
+    CrossCaseProfilePolicy,
+    CrossCaseProfileReport,
+    StrategyRoleProfile,
+)
 from .history import (
     BenchmarkConfidenceAnalyzer,
     write_benchmark_confidence,
@@ -28,10 +39,17 @@ __all__ = [
     "BenchmarkHistoryEntry",
     "BenchmarkReport",
     "BenchmarkStrategySnapshot",
+    "CaseRoleResult",
     "ConsolidationBenchmarkReport",
+    "CrossCaseProfileAnalyzer",
+    "CrossCaseProfilePolicy",
+    "CrossCaseProfileReport",
     "JsonBenchmarkHistoryStore",
     "StrategyConfidence",
+    "StrategyRoleProfile",
+    "load_benchmark_confidence",
     "run_consolidation_benchmark",
     "run_project_audit_benchmark",
     "write_benchmark_confidence",
+    "write_cross_case_profile",
 ]

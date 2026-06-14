@@ -166,6 +166,7 @@ state = engine.run(definition)
 - real isolated Python-project consolidation benchmark with acceptance checks;
 - independent read-only project-audit benchmark with parallel evidence gathering;
 - immutable benchmark history with confidence-aware consensus ranking;
+- cross-case strategy-role profiles over independent confidence reports;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
@@ -184,30 +185,27 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.36.0` adds a second independent benchmark case:
-`python-project-audit`. It performs a real read-only audit across source,
-documentation, and project configuration, acquires a missing documentation
-capability, verifies integrated child evidence, and proves that three admitted
-reads actually overlap in the parallel strategy.
+Version `0.37.0` adds cross-case strategy profiles. Each benchmark first
+produces its own confidence report. An external immutable mapping then assigns
+case-specific strategy names to common roles: `monolithic`, `sequential`, and
+`parallel`.
 
-`BenchmarkReport` now carries an explicit benchmark identity. History snapshots
-derive that identity from the report instead of hard-coding one case. The
-confidence CLI selects a case explicitly and keeps default reports, histories,
-and confidence outputs in separate case directories.
+The analyzer compares only ordinal role placement and case wins. It never sums
+latency, cost, tokens, or raw ranks across incompatible judge policies. Every
+source case must be independently confident before the cross-case report can be
+confident.
 
-Run either benchmark through the history workflow:
+Build the two confidence reports and the profile with:
 
 ```bash
 python -m tools.benchmark_confidence --run --case python-project-change
 python -m tools.benchmark_confidence --run --case python-project-audit
+python -m tools.cross_case_profile
 ```
 
-Standalone examples remain:
-
-```bash
-python -m examples.consolidation_benchmark
-python -m examples.project_audit_benchmark
-```
+The current two-case evidence selects the `parallel` role in both cases. This is
+a measured profile of the admitted benchmark suite, not a universal rule that
+parallel decomposition is always preferable.
 
 The complete production gate remains `python -m tools.release_gate`.
 

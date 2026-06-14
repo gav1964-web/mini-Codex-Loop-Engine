@@ -573,6 +573,14 @@ pyproject, capability acquisition и integration child evidence.
 разделяет artifacts по каталогам. Confidence history разных case намеренно
 несовместима и при смешивании отклоняется fail-closed.
 
+Версия `0.37.0` добавляет cross-case profile через внешнюю taxonomy ролей
+`monolithic`, `sequential`, `parallel`. Analyzer принимает только independent
+confidence reports и сравнивает ordinal placement и case wins.
+
+Latency, cost и case-specific judge values между workload не складываются.
+На текущих двух case роль `parallel` получила 2 из 2 побед и confident profile.
+Это наблюдение benchmark suite, а не встроенная routing policy.
+
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
 использовать idempotency key.

@@ -1269,6 +1269,69 @@ build/benchmarks/<case>/history/<run_id>.json
 build/benchmarks/<case>/confidence.json
 ```
 
+### Cross-Case Strategy Role Profile
+
+В `0.37.0` добавлен слой анализа над независимыми confidence reports:
+
+```text
+case-specific benchmark history
+  -> case confidence report
+  -> external strategy-to-role mapping
+  -> ordinal cross-case profile
+```
+
+Сырые strategy names различаются:
+
+```text
+python-project-change:
+  monolithic, sequential_staged, parallel_staged
+
+python-project-audit:
+  monolithic, sequential_evidence, parallel_evidence
+```
+
+`CrossCaseProfilePolicy` отображает их в общие роли `monolithic`,
+`sequential`, `parallel`. Mapping immutable и остаётся внешней policy; analyzer
+не выводит роль из имени strategy.
+
+Cross-case analyzer намеренно не складывает:
+
+- latency;
+- token/cost;
+- case-specific objective values;
+- raw judge rank sums.
+
+Эти значения получены в разных workload и могут иметь разные judge policies.
+Используются только ordinal role order внутри уже агрегированного confidence
+report и число unique case wins.
+
+Profile получает `confident`, только если:
+
+- число case достигает policy minimum;
+- каждый source confidence report имеет status `confident`;
+- consensus role один;
+- case-win share достигает внешнего threshold.
+
+Текущий профиль:
+
+```text
+parallel:   2 case wins, ordinal sum 2
+sequential: 0 case wins, ordinal sum 4
+monolithic: 0 case wins, ordinal sum 6
+```
+
+Это evidence для текущих двух case, а не hard-coded правило scheduler. CLI:
+
+```bash
+python -m tools.cross_case_profile
+```
+
+Artifact:
+
+```text
+build/benchmarks/cross_case_profile.json
+```
+
 ### Capability Acquisition
 
 ```text
@@ -1720,5 +1783,6 @@ Loop Engine
 
 ## Следующий этап
 
-1. Cross-case strategy profile без смешивания несовместимых judge policies.
-2. Общая taxonomy strategy roles: monolithic, sequential, parallel.
+1. Добавить benchmark case с resource contention или частичным failure.
+2. Проверить, сохраняется ли преимущество parallel role при конфликтующих
+   resource claims и recovery.

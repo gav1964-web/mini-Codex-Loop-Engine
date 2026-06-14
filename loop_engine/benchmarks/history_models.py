@@ -157,3 +157,51 @@ class BenchmarkConfidenceReport:
             "strategies": [asdict(item) for item in self.strategies],
             "reason": self.reason,
         }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> BenchmarkConfidenceReport:
+        if value.get("schema_version") != BENCHMARK_CONFIDENCE_SCHEMA_VERSION:
+            raise ValueError("unsupported benchmark confidence schema version")
+        policy = BenchmarkConfidencePolicy(**dict(value["policy"]))
+        strategies = tuple(
+            StrategyConfidence(**dict(item))
+            for item in value["strategies"]
+        )
+        report = cls(
+            status=str(value["status"]),
+            benchmark=str(value["benchmark"]),
+            case=str(value["case"]),
+            run_ids=tuple(str(item) for item in value["run_ids"]),
+            passed_run_count=int(value["passed_run_count"]),
+            consensus_winners=tuple(
+                str(item) for item in value["consensus_winners"]
+            ),
+            winner_share_basis_points=int(
+                value["winner_share_basis_points"]
+            ),
+            policy=policy,
+            strategies=strategies,
+            reason=str(value["reason"]),
+        )
+        _validate_confidence_report(report)
+        return report
+
+
+def _validate_confidence_report(report: BenchmarkConfidenceReport) -> None:
+    if report.status not in {
+        "insufficient_history",
+        "low_confidence",
+        "confident",
+    }:
+        raise ValueError("unsupported benchmark confidence status")
+    if not report.benchmark.strip() or not report.case.strip():
+        raise ValueError("benchmark confidence identity fields are required")
+    names = tuple(item.strategy for item in report.strategies)
+    if not names or len(names) != len(set(names)):
+        raise ValueError("benchmark confidence strategies must be unique")
+    if not set(report.consensus_winners) <= set(names):
+        raise ValueError("benchmark confidence winners are invalid")
+    if report.passed_run_count < 0 or report.passed_run_count > len(
+        report.run_ids
+    ):
+        raise ValueError("benchmark confidence passed count is invalid")
