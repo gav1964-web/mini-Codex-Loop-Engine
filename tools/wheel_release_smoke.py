@@ -85,7 +85,8 @@ def main() -> int:
                     "from loop_engine.release_history import ("
                     "JsonReleaseHistoryStore,ReleaseHistoryAnalyzer);"
                     "from loop_engine.tasks import ("
-                    "ResourceLease,StrategyMetrics,StrategyUsage);"
+                    "FencedResourceAdapter,ResourceLease,"
+                    "StrategyMetrics,StrategyUsage,run_fenced_operation);"
                     "print('wheel-smoke-ok')"
                 ),
             ),

@@ -13,7 +13,27 @@ from loop_engine.adapters import (
     FileResourceLeasePolicy,
 )
 from loop_engine.tasks import ResourceClaim
-from loop_engine.tasks.resource_leases import run_leased_operation
+from loop_engine.tasks.resource_leases import (
+    run_fenced_operation,
+    run_leased_operation,
+)
+
+
+class DemoFencedAdapter:
+    def __init__(self) -> None:
+        self.highest_token = 0
+
+    def execute_fenced(
+        self,
+        *,
+        resource: str,
+        fencing_token: int,
+        operation,
+    ):
+        if fencing_token < self.highest_token:
+            raise RuntimeError("stale_fencing_token")
+        self.highest_token = fencing_token
+        return operation()
 
 
 def main() -> None:
@@ -60,6 +80,26 @@ def main() -> None:
             owner_id="scheduler-b",
             claims=(claim,),
         )
+        if outcomes[0].lease is None or acquired_after_release.lease is None:
+            raise RuntimeError("expected write leases with fencing tokens")
+        adapter = DemoFencedAdapter()
+        side_effects: list[str] = []
+        run_fenced_operation(
+            lease=acquired_after_release.lease,
+            resource=claim.resource,
+            adapter=adapter,
+            operation=lambda: side_effects.append("new-owner"),
+        )
+        stale_rejected = False
+        try:
+            run_fenced_operation(
+                lease=outcomes[0].lease,
+                resource=claim.resource,
+                adapter=adapter,
+                operation=lambda: side_effects.append("stale-owner"),
+            )
+        except RuntimeError as exc:
+            stale_rejected = str(exc) == "stale_fencing_token"
 
         print(
             json.dumps(
@@ -71,6 +111,16 @@ def main() -> None:
                     "second_acquired_after_release": (
                         acquired_after_release.granted
                     ),
+                    "old_fencing_token": outcomes[0].lease.fencing_token(
+                        claim.resource
+                    ),
+                    "new_fencing_token": (
+                        acquired_after_release.lease.fencing_token(
+                            claim.resource
+                        )
+                    ),
+                    "stale_side_effect_rejected": stale_rejected,
+                    "side_effects": side_effects,
                     "registry": str(registry),
                 },
                 ensure_ascii=False,

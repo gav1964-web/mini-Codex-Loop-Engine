@@ -895,11 +895,37 @@ Heartbeat setup/renew failure становится
 не запускается при невалидном heartbeat contract. Если renew сломался уже во
 время worker execution, результат не может считаться успешным.
 
-Граница гарантии остаётся принципиальной: TTL не является fencing token.
-Произвольный worker, который продолжил внешний side effect после потери lease,
-невозможно безопасно остановить общим Python contract. Для строгого исключения
-overlap опасный resource adapter должен проверять fencing token либо выполнять
-worker в cancellable process supervisor.
+В `0.32.0` registry schema v3 добавляет persistent monotonic fencing counters
+для каждого write-resource. При успешном acquire manager атомарно увеличивает
+counter и помещает token в `ResourceLease.fencing_tokens`. Counter не удаляется
+после release, expiry или recovery, поэтому новый владелец всегда получает
+token больше старого. Renew продлевает TTL, но не меняет token.
+
+Read claims не получают fencing tokens. Для нескольких write-resources tokens
+выдаются в одной registry transaction. Registry сохраняет:
+
+```text
+fencing_counters: resource -> highest issued token
+lease.fencing_tokens: claimed write resource -> token
+```
+
+Schema v2 намеренно не мигрируется автоматически: reset неизвестной истории
+token-ов разрушил бы fencing guarantee. Такой registry fail-closed отклоняется
+и требует явного operational reset/migration при гарантированно остановленных
+workers.
+
+`run_fenced_operation` извлекает token из lease и передаёт его typed
+`FencedResourceAdapter.execute_fenced`. Гарантия возникает только если adapter
+атомарно сравнивает token с highest observed token и выполняет mutation в той
+же critical section/transaction. Предварительная проверка token отдельно от
+side effect не считается fencing из-за TOCTOU.
+
+Это закрывает overlap-сценарий: старый worker может физически продолжать
+работать после потери lease, но опасный adapter отвергнет его token после того,
+как увидел более новый. Для внешних систем без token-aware API по-прежнему
+нужен cancellable process boundary или idempotent operation.
+
+Lease acquisition event теперь сохраняет issued fencing tokens как evidence.
 
 Backend включается явно через `TaskScheduler(resource_lease_manager=...)`.
 Без него поведение `0.20.0` полностью сохраняется.
@@ -1520,5 +1546,4 @@ Loop Engine
 
 ## Следующий этап
 
-1. Optional fencing tokens для опасных resource adapters.
-2. Repeated-sample statistics для noisy latency measurements.
+1. Repeated-sample statistics для noisy latency measurements.

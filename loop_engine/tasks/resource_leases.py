@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import threading
-from typing import Callable, Generic, Protocol, TypeVar
+from types import MappingProxyType
+from typing import Callable, Generic, Mapping, Protocol, TypeVar
 
 from .events import record_task_event
 from .models import TaskGraph, TaskNode
 from .parallel import ResourceClaim
+
+T = TypeVar("T")
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +20,31 @@ class ResourceLease:
     owner_id: str
     claims: tuple[ResourceClaim, ...]
     expires_at: float
+    fencing_tokens: Mapping[str, int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        tokens = dict(self.fencing_tokens)
+        write_resources = {
+            claim.resource for claim in self.claims if claim.mode == "write"
+        }
+        if set(tokens) - write_resources:
+            raise ValueError("fencing tokens require matching write claims")
+        if any(
+            not isinstance(token, int)
+            or isinstance(token, bool)
+            or token <= 0
+            for token in tokens.values()
+        ):
+            raise ValueError("fencing tokens must be positive integers")
+        object.__setattr__(self, "fencing_tokens", MappingProxyType(tokens))
+
+    def fencing_token(self, resource: str) -> int:
+        try:
+            return self.fencing_tokens[resource]
+        except KeyError as exc:
+            raise ValueError(
+                f"resource lease has no fencing token for: {resource}"
+            ) from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,8 +77,15 @@ class ResourceLeaseManager(Protocol):
         ...
 
 
-T = TypeVar("T")
-
+class FencedResourceAdapter(Protocol):
+    def execute_fenced(
+        self,
+        *,
+        resource: str,
+        fencing_token: int,
+        operation: Callable[[], T],
+    ) -> T:
+        ...
 
 @dataclass(frozen=True, slots=True)
 class LeasedOperationResult(Generic[T]):
@@ -132,6 +167,23 @@ def run_leased_operation(
     )
 
 
+def run_fenced_operation(
+    *,
+    lease: ResourceLease,
+    resource: str,
+    adapter: FencedResourceAdapter,
+    operation: Callable[[], T],
+) -> T:
+    if not isinstance(lease, ResourceLease):
+        raise TypeError("resource lease contract is required")
+    token = lease.fencing_token(resource)
+    return adapter.execute_fenced(
+        resource=resource,
+        fencing_token=token,
+        operation=operation,
+    )
+
+
 class _LeaseHeartbeat:
     def __init__(
         self,
@@ -203,5 +255,6 @@ def record_resource_lease(
             "nodes": [node.id for node in nodes],
             "resources": [claim.resource for claim in lease.claims],
             "expires_at": lease.expires_at,
+            "fencing_tokens": dict(lease.fencing_tokens),
         },
     )

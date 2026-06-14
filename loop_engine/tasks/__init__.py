@@ -59,9 +59,11 @@ from .demo import build_task_demo
 from .persistence import JsonTaskGraphStore
 from .parallel import ResourceClaim, TaskSchedulerPolicy
 from .resource_leases import (
+    FencedResourceAdapter,
     ResourceLease,
     ResourceLeaseAttempt,
     ResourceLeaseManager,
+    run_fenced_operation,
 )
 from .replay import (
     DecompositionStrategyRunner,
@@ -104,6 +106,7 @@ __all__ = [
     "DecompositionTraceEntry",
     "FunctionIntegrationVerifier",
     "FunctionLeafExecutor",
+    "FencedResourceAdapter",
     "FunctionCapabilityAcquirer",
     "InMemoryCapabilityResolver",
     "IntegrationCommandSpec",
@@ -132,6 +135,7 @@ __all__ = [
     "ResourceLease",
     "ResourceLeaseAttempt",
     "ResourceLeaseManager",
+    "run_fenced_operation",
     "SandboxMount",
     "ScriptedTaskDecomposer",
     "TaskBudget",

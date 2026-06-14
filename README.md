@@ -158,6 +158,7 @@ state = engine.run(definition)
 - immutable read/write resource claims for parallel workspace mutation;
 - atomic cross-process resource leases for shared scheduler resources;
 - lease heartbeat and expiry recovery for stalled scheduler ownership;
+- persistent monotonic fencing tokens for dangerous write-resource adapters;
 - context-bound decomposition replay and strategy comparison;
 - explicit lexicographic judge policies for decomposition strategy ranking;
 - measured latency and externally supplied token/cost strategy evidence;
@@ -179,23 +180,21 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.31.0` adds persistent release history and deterministic regression
-trends. Every canonical `tools.release_gate` run archives its complete report
-under `build/release_history/runs/`.
+Version `0.32.0` adds persistent monotonic fencing tokens for write-resource
+leases. The schema-v3 lease registry retains per-resource counters after
+release, expiry, and owner recovery. Renewing a lease preserves its token;
+reacquiring the same write resource receives a strictly greater token.
 
-`tools.release_trends` compares the newest run with a bounded rolling window.
-Gate or stage status downgrades are regressions. Stage duration is a regression
-only when it exceeds both the configured median ratio and absolute delta, which
-avoids noisy alerts for very short stages.
+`run_fenced_operation` passes the token to a typed `FencedResourceAdapter`.
+Fencing is guaranteed only when that adapter atomically validates the token at
+the side-effect boundary. Read leases do not receive tokens, and schema-v2
+registries fail closed instead of resetting counter history.
 
-Analyze the archived history with:
+Run the fencing demonstration with:
 
 ```bash
-python -m tools.release_trends
+python -m examples.resource_leases_demo
 ```
-
-Use `--record-report PATH` only to import a report that was not produced by the
-canonical gate.
 
 The complete production gate remains `python -m tools.release_gate`.
 

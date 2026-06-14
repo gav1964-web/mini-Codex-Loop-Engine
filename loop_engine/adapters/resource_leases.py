@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import os
-import shutil
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 from uuid import uuid4
@@ -18,8 +16,13 @@ from loop_engine.tasks.resource_leases import (
 )
 
 from .subprocesses import lookup_process_identity
-
-RESOURCE_LEASE_SCHEMA_VERSION = 2
+from .directory_lock import DirectoryLock
+from .resource_lease_registry import (
+    LeaseRecord,
+    LeaseRegistry,
+    load_registry,
+    save_registry,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,18 +46,6 @@ class FileResourceLeasePolicy:
             raise ValueError(
                 "resource lease heartbeat interval must be less than TTL"
             )
-
-
-@dataclass(frozen=True, slots=True)
-class _LeaseRecord:
-    lease_id: str
-    owner_id: str
-    owner_pid: int
-    process_identity: str
-    claims: tuple[ResourceClaim, ...]
-    acquired_at: float
-    heartbeat_at: float
-    expires_at: float
 
 
 class FileResourceLeaseManager:
@@ -112,18 +103,24 @@ class FileResourceLeaseManager:
         deadline = now + self.policy.acquire_timeout_seconds
         while True:
             with self._registry_lock(deadline):
-                records = self._load()
-                live = self._live_records(records)
+                registry = self._load()
+                live = self._live_records(list(registry.records))
                 conflicts = _conflicting_resources(normalized, live)
                 if not conflicts:
+                    counters = dict(registry.fencing_counters)
+                    fencing_tokens = _next_fencing_tokens(
+                        normalized,
+                        counters,
+                    )
                     lease = ResourceLease(
                         lease_id=uuid4().hex,
                         owner_id=owner,
                         claims=normalized,
                         expires_at=self.clock() + self.policy.lease_ttl_seconds,
+                        fencing_tokens=fencing_tokens,
                     )
                     live.append(
-                        _LeaseRecord(
+                        LeaseRecord(
                             lease_id=lease.lease_id,
                             owner_id=owner,
                             owner_pid=self.pid,
@@ -132,12 +129,13 @@ class FileResourceLeaseManager:
                             acquired_at=self.clock(),
                             heartbeat_at=self.clock(),
                             expires_at=lease.expires_at,
+                            fencing_tokens=fencing_tokens,
                         )
                     )
-                    self._save(live)
+                    self._save(live, counters)
                     return ResourceLeaseAttempt(lease=lease)
-                if live != records:
-                    self._save(live)
+                if live != list(registry.records):
+                    self._save(live, dict(registry.fencing_counters))
             if self.clock() >= deadline:
                 return ResourceLeaseAttempt(
                     lease=None,
@@ -154,7 +152,8 @@ class FileResourceLeaseManager:
         self._validate_lease(lease)
         deadline = self.clock() + self.policy.acquire_timeout_seconds
         with self._registry_lock(deadline):
-            records = self._load()
+            registry = self._load()
+            records = list(registry.records)
             now = self.clock()
             match = self._owned_record(
                 records,
@@ -166,11 +165,12 @@ class FileResourceLeaseManager:
                 owner_id=lease.owner_id,
                 claims=lease.claims,
                 expires_at=now + self.policy.lease_ttl_seconds,
+                fencing_tokens=lease.fencing_tokens,
             )
             self._save(
                 [
                     (
-                        _LeaseRecord(
+                        LeaseRecord(
                             lease_id=record.lease_id,
                             owner_id=record.owner_id,
                             owner_pid=record.owner_pid,
@@ -179,12 +179,14 @@ class FileResourceLeaseManager:
                             acquired_at=record.acquired_at,
                             heartbeat_at=now,
                             expires_at=renewed.expires_at,
+                            fencing_tokens=record.fencing_tokens,
                         )
                         if record.lease_id == match.lease_id
                         else record
                     )
                     for record in records
-                ]
+                ],
+                dict(registry.fencing_counters),
             )
             return renewed
 
@@ -192,7 +194,8 @@ class FileResourceLeaseManager:
         self._validate_lease(lease)
         deadline = self.clock() + self.policy.acquire_timeout_seconds
         with self._registry_lock(deadline):
-            records = self._load()
+            registry = self._load()
+            records = list(registry.records)
             try:
                 self._owned_record(records, lease)
             except KeyError:
@@ -202,10 +205,11 @@ class FileResourceLeaseManager:
                     record
                     for record in records
                     if record.lease_id != lease.lease_id
-                ]
+                ],
+                dict(registry.fencing_counters),
             )
 
-    def _live_records(self, records: list[_LeaseRecord]) -> list[_LeaseRecord]:
+    def _live_records(self, records: list[LeaseRecord]) -> list[LeaseRecord]:
         now = self.clock()
         return [
             record
@@ -216,11 +220,11 @@ class FileResourceLeaseManager:
 
     def _owned_record(
         self,
-        records: list[_LeaseRecord],
+        records: list[LeaseRecord],
         lease: ResourceLease,
         *,
         require_live_at: float | None = None,
-    ) -> _LeaseRecord:
+    ) -> LeaseRecord:
         match = next(
             (record for record in records if record.lease_id == lease.lease_id),
             None,
@@ -232,6 +236,7 @@ class FileResourceLeaseManager:
             or match.owner_pid != self.pid
             or match.process_identity != self.process_identity
             or match.claims != lease.claims
+            or dict(match.fencing_tokens) != dict(lease.fencing_tokens)
         ):
             raise ValueError("resource lease is not owned by this manager")
         if require_live_at is not None and match.expires_at <= require_live_at:
@@ -243,53 +248,18 @@ class FileResourceLeaseManager:
         if not isinstance(lease, ResourceLease):
             raise TypeError("resource lease contract is required")
 
-    def _load(self) -> list[_LeaseRecord]:
-        if not self.storage_path.exists():
-            return []
-        payload = json.loads(self.storage_path.read_text(encoding="utf-8"))
-        if payload.get("schema_version") != RESOURCE_LEASE_SCHEMA_VERSION:
-            raise ValueError("unsupported resource lease schema_version")
-        rows = payload.get("leases")
-        if not isinstance(rows, list):
-            raise ValueError("resource lease rows must be an array")
-        records: list[_LeaseRecord] = []
-        seen: set[str] = set()
-        for row in rows:
-            values = dict(row)
-            raw_claims = values.pop("claims")
-            record = _LeaseRecord(
-                claims=tuple(ResourceClaim(**dict(claim)) for claim in raw_claims),
-                **values,
-            )
-            if record.lease_id in seen:
-                raise ValueError("duplicate resource lease_id")
-            seen.add(record.lease_id)
-            records.append(record)
-        return records
+    def _load(self) -> LeaseRegistry:
+        return load_registry(self.storage_path)
 
-    def _save(self, records: list[_LeaseRecord]) -> None:
-        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "schema_version": RESOURCE_LEASE_SCHEMA_VERSION,
-            "leases": [
-                {
-                    **asdict(record),
-                    "claims": [asdict(claim) for claim in record.claims],
-                }
-                for record in sorted(records, key=lambda item: item.lease_id)
-            ],
-        }
-        temporary = self.storage_path.with_name(
-            f".{self.storage_path.name}.{uuid4().hex}.tmp"
-        )
-        temporary.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        os.replace(temporary, self.storage_path)
+    def _save(
+        self,
+        records: list[LeaseRecord],
+        fencing_counters: dict[str, int],
+    ) -> None:
+        save_registry(self.storage_path, records, fencing_counters)
 
-    def _registry_lock(self, deadline: float) -> _DirectoryLock:
-        return _DirectoryLock(
+    def _registry_lock(self, deadline: float) -> DirectoryLock:
+        return DirectoryLock(
             self.lock_path,
             deadline=deadline,
             stale_after_seconds=self.policy.stale_lock_seconds,
@@ -297,74 +267,6 @@ class FileResourceLeaseManager:
             sleep=self.sleep,
             poll_interval_seconds=self.policy.poll_interval_seconds,
         )
-
-
-class _DirectoryLock:
-    def __init__(
-        self,
-        path: Path,
-        *,
-        deadline: float,
-        stale_after_seconds: float,
-        clock: Callable[[], float],
-        sleep: Callable[[float], None],
-        poll_interval_seconds: float,
-    ) -> None:
-        self.path = path
-        self.deadline = deadline
-        self.stale_after_seconds = stale_after_seconds
-        self.clock = clock
-        self.sleep = sleep
-        self.poll_interval_seconds = poll_interval_seconds
-        self.acquired = False
-
-    def __enter__(self) -> _DirectoryLock:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        while True:
-            try:
-                self.path.mkdir()
-                (self.path / "created_at").write_text(
-                    str(self.clock()),
-                    encoding="ascii",
-                )
-                self.acquired = True
-                return self
-            except FileExistsError:
-                self._reclaim_if_stale()
-                if self.clock() >= self.deadline:
-                    raise TimeoutError("resource lease registry lock timed out")
-                self.sleep(
-                    min(
-                        self.poll_interval_seconds,
-                        max(0.0, self.deadline - self.clock()),
-                    )
-                )
-
-    def __exit__(self, exc_type, exc, traceback) -> None:
-        if self.acquired:
-            shutil.rmtree(self.path, ignore_errors=True)
-            self.acquired = False
-
-    def _reclaim_if_stale(self) -> None:
-        try:
-            fallback_created_at = self.path.stat().st_mtime
-        except (FileNotFoundError, OSError):
-            return
-        try:
-            created_at = float(
-                (self.path / "created_at").read_text(encoding="ascii")
-            )
-        except (FileNotFoundError, OSError, ValueError):
-            created_at = fallback_created_at
-        if self.clock() - created_at <= self.stale_after_seconds:
-            return
-        tombstone = self.path.with_name(f"{self.path.name}.{uuid4().hex}.stale")
-        try:
-            self.path.rename(tombstone)
-        except (FileNotFoundError, FileExistsError, PermissionError, OSError):
-            return
-        shutil.rmtree(tombstone, ignore_errors=True)
-
 
 def _normalize_claims(
     claims: tuple[ResourceClaim, ...],
@@ -381,7 +283,7 @@ def _normalize_claims(
 
 def _conflicting_resources(
     requested: tuple[ResourceClaim, ...],
-    records: list[_LeaseRecord],
+    records: list[LeaseRecord],
 ) -> tuple[str, ...]:
     occupied: dict[str, set[str]] = {}
     for record in records:
@@ -393,3 +295,17 @@ def _conflicting_resources(
         if claim.resource in occupied
         and (claim.mode == "write" or "write" in occupied[claim.resource])
     )
+
+
+def _next_fencing_tokens(
+    claims: tuple[ResourceClaim, ...],
+    counters: dict[str, int],
+) -> dict[str, int]:
+    tokens: dict[str, int] = {}
+    for claim in claims:
+        if claim.mode != "write":
+            continue
+        token = counters.get(claim.resource, 0) + 1
+        counters[claim.resource] = token
+        tokens[claim.resource] = token
+    return tokens

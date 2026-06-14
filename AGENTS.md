@@ -35,6 +35,11 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Checkpoints must preserve the current loop phase and completed action index.
 - Recovery must not repeat actions whose results were durably checkpointed.
 - In-flight side effects are at-least-once unless a tool provides idempotency.
+- Write-resource leases must carry persistent monotonic fencing tokens. A
+  dangerous adapter may claim fencing safety only when it atomically rejects
+  stale tokens at the side-effect boundary.
+- Fencing counters must survive release and expiry; schema downgrade or missing
+  counters must fail closed rather than reset token history.
 - Filesystem tools must resolve every path inside one explicit workspace root.
 - File mutations must be bounded, atomic, and idempotent under recovery.
 - Do not add unrestricted shell commands or arbitrary filesystem writes.
