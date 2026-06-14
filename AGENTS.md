@@ -98,6 +98,11 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Retry authority must come from immutable external policy: admitted node,
   retry-code allowlist, bounded attempts, and exact idempotency key. Task
   metadata and leaf executors may request retry but must not authorize it.
+- Retry delay must come from immutable external policy and run through an
+  injected cancellable waiter. The scheduler must not call an unbounded sleep.
+- Lease contention may be retried only through the same explicit retry
+  authority. It must not consume a leaf execution attempt, and no lease may be
+  held while waiting between acquisitions.
 - Token and cost metrics must come from an explicit typed usage provider, never
   inferred from task metadata or hidden provider pricing.
 - Cost objectives require measured values with one comparable cost basis across

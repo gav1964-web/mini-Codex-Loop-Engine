@@ -65,7 +65,12 @@ from .resource_leases import (
     ResourceLeaseManager,
     run_fenced_operation,
 )
-from .retry import RetryDecision, TaskRetryPolicy
+from .retry import (
+    CancellableRetryWaiter,
+    RetryDecision,
+    RetryWaiter,
+    TaskRetryPolicy,
+)
 from .replay import (
     DecompositionStrategyRunner,
     DecompositionTrace,
@@ -98,6 +103,7 @@ __all__ = [
     "BoundedCommandIntegrationVerifier",
     "BoundedIntegrationPolicy",
     "CapabilityResolution",
+    "CancellableRetryWaiter",
     "ChildTaskSpec",
     "CodingLeafExecutor",
     "CodingLeafPolicy",
@@ -138,6 +144,7 @@ __all__ = [
     "ResourceLeaseAttempt",
     "ResourceLeaseManager",
     "RetryDecision",
+    "RetryWaiter",
     "run_fenced_operation",
     "SandboxMount",
     "ScriptedTaskDecomposer",

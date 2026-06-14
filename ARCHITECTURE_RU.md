@@ -1926,6 +1926,28 @@ Loop Engine
 
 ## Следующий этап
 
-1. Добавить retry delay/backoff как внешний cancellable clock policy.
-2. Проверить retry после cross-process lease contention без удержания lease
-   между попытками.
+### Retry Backoff и Lease Contention Recovery
+
+В `0.40.0` retry policy дополнена bounded backoff schedule. Задержка остаётся
+данными immutable `TaskRetryPolicy`, а ожидание выполняет отдельный
+`RetryWaiter`. Core scheduler не вызывает `sleep` и не владеет часами.
+Production adapter `CancellableRetryWaiter` использует внешний stop event;
+отсутствующий, отменённый или упавший waiter завершает delayed retry
+fail-closed.
+
+`TaskNode.retries` отделён от `attempts`. Это позволяет повторять acquisition
+после `resource_lease_contention`, не притворяясь, что leaf уже исполнялся.
+Retry допускается только когда внешний policy одновременно:
+
+- разрешает код `resource_lease_contention`;
+- содержит точный idempotency key узла;
+- имеет оставшийся retry budget.
+
+Registry/heartbeat errors не маскируются под contention. Между acquisition
+attempts lease отсутствует; executor и leaf execution budget не затрагиваются.
+Task graph writer использует schema v3, loader принимает v1-v3.
+
+1. Добавить deadline-aware retry budget, объединяющий число повторов и
+   допустимое wall-clock окно.
+2. Добавить детерминированный jitter policy для нескольких конкурирующих
+   scheduler processes без скрытой случайности.

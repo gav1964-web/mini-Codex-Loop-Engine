@@ -71,8 +71,10 @@ class LeafExecutionResult:
         if not isinstance(self.retryable, bool):
             raise TypeError("leaf retryable must be boolean")
         if self.retryable:
-            if self.status != "failed":
-                raise ValueError("retryable leaf result must be failed")
+            if self.status not in {"failed", "blocked"}:
+                raise ValueError(
+                    "retryable leaf result must be failed or blocked"
+                )
             code = (self.retry_code or "").strip()
             key = (self.idempotency_key or "").strip()
             if not code or not key:
@@ -99,6 +101,7 @@ class TaskNode:
     status: TaskStatus = TaskStatus.PENDING
     depth: int = 0
     attempts: int = 0
+    retries: int = 0
     result: LeafExecutionResult | None = None
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)

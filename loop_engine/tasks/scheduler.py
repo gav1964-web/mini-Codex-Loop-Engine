@@ -31,15 +31,14 @@ from .resource_leases import (
     run_leased_operation,
 )
 from .retry import (
+    RetryWaiter,
     TaskRetryPolicy,
-    evaluate_retry,
-    retry_rejected_payload,
-    retry_scheduled_payload,
 )
 from .scheduler_propagation import TaskSchedulerPropagation
+from .scheduler_retry import TaskSchedulerRetry
 
 
-class TaskScheduler(TaskSchedulerPropagation):
+class TaskScheduler(TaskSchedulerRetry, TaskSchedulerPropagation):
     def __init__(
         self,
         *,
@@ -52,6 +51,7 @@ class TaskScheduler(TaskSchedulerPropagation):
         policy: TaskSchedulerPolicy | None = None,
         resource_lease_manager: ResourceLeaseManager | None = None,
         retry_policy: TaskRetryPolicy | None = None,
+        retry_waiter: RetryWaiter | None = None,
     ) -> None:
         self.decomposer = decomposer
         self.capability_resolver = capability_resolver
@@ -62,6 +62,7 @@ class TaskScheduler(TaskSchedulerPropagation):
         self.policy = policy or TaskSchedulerPolicy()
         self.resource_lease_manager = resource_lease_manager
         self.retry_policy = retry_policy
+        self.retry_waiter = retry_waiter
 
     def run(self, graph: TaskGraph) -> TaskGraph:
         validate_task_graph(graph)
@@ -276,11 +277,18 @@ class TaskScheduler(TaskSchedulerPropagation):
             operation=execute,
         )
         if not outcome.executed:
+            contention = (
+                outcome.acquisition_error is None
+                and outcome.heartbeat_error is None
+                and bool(outcome.conflicting_resources)
+            )
             error = outcome.acquisition_error or outcome.heartbeat_error or (
                 "resource_lease_unavailable:"
                 + (",".join(outcome.conflicting_resources) or "unknown")
             )
-            self._block_for_resource_lease(graph, admitted, error)
+            self._block_for_resource_lease(
+                graph, admitted, error, contention=contention
+            )
             return
         results = outcome.value
         lease_error = outcome.heartbeat_error or outcome.release_error
@@ -295,62 +303,6 @@ class TaskScheduler(TaskSchedulerPropagation):
             }
         for node in sorted(prepared, key=lambda item: item.id):
             self._apply_leaf_result(graph, node, results[node.id])
-
-    def _block_for_resource_lease(
-        self,
-        graph: TaskGraph,
-        nodes: list[TaskNode],
-        error: str,
-    ) -> None:
-        for node in nodes:
-            node.status = TaskStatus.BLOCKED
-            node.error = error
-            record_task_event(
-                graph,
-                "task_blocked",
-                node.id,
-                {"error": error},
-            )
-        self._save(graph)
-
-    def _apply_leaf_result(
-        self,
-        graph: TaskGraph,
-        node: TaskNode,
-        result: LeafExecutionResult,
-    ) -> None:
-        node.result = result
-        if result.status == "completed":
-            node.status = TaskStatus.COMPLETED
-            record_task_event(graph, "leaf_completed", node.id, {"summary": result.summary})
-        elif result.status == "blocked":
-            node.status = TaskStatus.BLOCKED
-            node.error = result.error or result.summary
-            record_task_event(graph, "leaf_blocked", node.id, {"error": node.error})
-        else:
-            node.error = result.error or result.summary
-            decision = evaluate_retry(self.retry_policy, node, result)
-            if decision.retry:
-                node.status = TaskStatus.READY
-                node.error = None
-                record_task_event(
-                    graph, "leaf_retry_scheduled", node.id,
-                    retry_scheduled_payload(self.retry_policy, node, result),
-                )
-            else:
-                node.status = TaskStatus.FAILED
-                if result.retryable:
-                    record_task_event(
-                        graph, "leaf_retry_rejected", node.id,
-                        retry_rejected_payload(decision, result),
-                    )
-                record_task_event(
-                    graph,
-                    "leaf_failed",
-                    node.id,
-                    {"error": node.error},
-                )
-        self._save(graph)
 
     @staticmethod
     def _candidate_nodes(graph: TaskGraph) -> list[TaskNode]:

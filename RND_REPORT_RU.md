@@ -605,3 +605,18 @@ Task graph persistence переведена на schema v2 с backward-readable 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
 использовать idempotency key.
+
+Версия `0.40.0` добавляет внешний cancellable backoff. Delay schedule находится
+в immutable retry policy, а scheduler получает отдельный `RetryWaiter`; скрытых
+или неограниченных `sleep` в core нет. Отмена, отсутствие waiter при ненулевой
+задержке и ошибка waiter завершают retry fail-closed с event evidence.
+
+Cross-process lease contention теперь может быть повторена через тот же
+allowlist/idempotency contract. Счётчик `retries` отделён от execution
+`attempts`: ожидание ресурса не расходует leaf execution budget. Тестовый
+lease manager подтверждает, что во время backoff активного lease нет, после
+одного отказа executor запускается ровно один раз, а постоянная contention
+ограниченно завершается `blocked`.
+
+Task graph persistence переведена на schema v3; schema v1 и v2 остаются
+читаемыми.

@@ -187,7 +187,17 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.39.0` adds explicit bounded retry for terminal failed leaves.
+Version `0.40.0` adds external cancellable retry backoff and bounded recovery
+from cross-process resource lease contention. Backoff never uses an implicit
+sleep: `TaskScheduler` receives a `RetryWaiter`, while delay values remain in
+immutable `TaskRetryPolicy`.
+
+Lease contention uses the same retry-code allowlist and exact idempotency-key
+authority as executor failure. Contention retries are counted separately from
+leaf execution attempts, so waiting for a resource does not consume execution
+budget. A lease is never held during backoff.
+
+Version `0.39.0` added explicit bounded retry for terminal failed leaves.
 `TaskRetryPolicy` is external authority for retryable error codes, maximum
 attempts, and the expected idempotency key for each admitted node. A leaf result
 may request retry, but cannot authorize itself.
@@ -195,7 +205,8 @@ may request retry, but cannot authorize itself.
 Retry requests fail closed when policy is absent, the code is not allowed, the
 node is not admitted, the key differs, or the attempt budget is exhausted.
 Every scheduled or rejected retry is retained as a task event. Retry fields
-also survive task-graph JSON persistence.
+also survive task-graph JSON persistence. The current writer uses schema v3;
+loaders remain compatible with schema v1 and v2.
 
 The new benchmark proves one transient failure followed by one successful
 side effect using the same key, with exactly one materialized commit:
