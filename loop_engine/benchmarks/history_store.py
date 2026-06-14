@@ -18,7 +18,7 @@ from .history_models import (
     BenchmarkHistoryEntry,
     BenchmarkStrategySnapshot,
 )
-from .models import ConsolidationBenchmarkReport
+from .models import BenchmarkReport
 
 _RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -40,15 +40,13 @@ class JsonBenchmarkHistoryStore:
 
     def record(
         self,
-        report: ConsolidationBenchmarkReport,
+        report: BenchmarkReport,
         *,
         run_id: str | None = None,
         recorded_at: float | None = None,
     ) -> BenchmarkHistoryEntry:
-        if not isinstance(report, ConsolidationBenchmarkReport):
-            raise TypeError(
-                "benchmark history requires ConsolidationBenchmarkReport"
-            )
+        if not isinstance(report, BenchmarkReport):
+            raise TypeError("benchmark history requires BenchmarkReport")
         entry = _snapshot(
             report,
             run_id=_validated_run_id(run_id or uuid4().hex),
@@ -106,7 +104,7 @@ class JsonBenchmarkHistoryStore:
 
 
 def _snapshot(
-    report: ConsolidationBenchmarkReport,
+    report: BenchmarkReport,
     *,
     run_id: str,
     recorded_at: float,
@@ -119,7 +117,7 @@ def _snapshot(
     return BenchmarkHistoryEntry(
         run_id=run_id,
         recorded_at=float(recorded_at),
-        benchmark="python-project-change",
+        benchmark=report.benchmark,
         case=report.comparison.case,
         passed=report.passed,
         policy_sha256=_sha256(policy_payload),

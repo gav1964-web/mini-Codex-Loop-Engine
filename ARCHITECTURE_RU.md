@@ -1222,6 +1222,53 @@ build/consolidation_benchmark/history/<run_id>.json
 build/consolidation_benchmark/confidence.json
 ```
 
+### Multiple Benchmark Cases
+
+В `0.36.0` benchmark suite перестал быть единственным mutation-oriented case.
+Добавлен независимый `python-project-audit`:
+
+```text
+isolated read-only fixture
+  -> inspect source
+  -> inspect documentation
+  -> inspect configuration
+  -> acquire missing documentation capability
+  -> integrate child evidence
+  -> verify expected project facts
+```
+
+Сравниваются `monolithic`, `sequential_evidence` и `parallel_evidence`.
+Parallel strategy допускает три независимых read-only leaf и acceptance требует
+фактического пересечения всех трёх monotonic intervals.
+
+В отличие от `python-project-change`, audit case:
+
+- не изменяет source;
+- не запускает subprocess verification;
+- проверяет evidence composition родителя;
+- использует три read-resource claims;
+- измеряет выгоду parallel evidence gathering.
+
+Общий `BenchmarkReport` теперь содержит явное поле `benchmark`. Старое имя
+`ConsolidationBenchmarkReport` сохранено как compatibility alias, но новые
+consumer-ы должны использовать общий contract.
+
+History store извлекает benchmark identity из report. Confidence analyzer
+по-прежнему запрещает смешивать разные case. CLI принимает:
+
+```bash
+python -m tools.benchmark_confidence --run --case python-project-change
+python -m tools.benchmark_confidence --run --case python-project-audit
+```
+
+Default artifacts разделены:
+
+```text
+build/benchmarks/<case>/report.json
+build/benchmarks/<case>/history/<run_id>.json
+build/benchmarks/<case>/confidence.json
+```
+
 ### Capability Acquisition
 
 ```text
@@ -1673,5 +1720,5 @@ Loop Engine
 
 ## Следующий этап
 
-1. Несколько независимых benchmark cases вместо одного Python-change fixture.
-2. Cross-case strategy profile без смешивания несовместимых judge policies.
+1. Cross-case strategy profile без смешивания несовместимых judge policies.
+2. Общая taxonomy strategy roles: monolithic, sequential, parallel.

@@ -20,10 +20,19 @@ class BenchmarkAcceptanceCheck:
 
 
 @dataclass(frozen=True, slots=True)
-class ConsolidationBenchmarkReport:
+class BenchmarkReport:
+    benchmark: str
     comparison: StrategyComparison
     ranking: StrategyRanking
     checks: tuple[BenchmarkAcceptanceCheck, ...]
+
+    def __post_init__(self) -> None:
+        benchmark = self.benchmark.strip()
+        if not benchmark:
+            raise ValueError("benchmark name is required")
+        if self.comparison.case != self.ranking.case:
+            raise ValueError("benchmark comparison and ranking case differ")
+        object.__setattr__(self, "benchmark", benchmark)
 
     @property
     def passed(self) -> bool:
@@ -32,7 +41,7 @@ class ConsolidationBenchmarkReport:
     def to_dict(self) -> dict:
         return {
             "schema_version": CONSOLIDATION_BENCHMARK_SCHEMA_VERSION,
-            "benchmark": "python-project-change",
+            "benchmark": self.benchmark,
             "passed": self.passed,
             "checks": [asdict(check) for check in self.checks],
             "comparison": self.comparison.to_dict(),
@@ -48,3 +57,6 @@ class ConsolidationBenchmarkReport:
             encoding="utf-8",
         )
         os.replace(temporary, target)
+
+
+ConsolidationBenchmarkReport = BenchmarkReport

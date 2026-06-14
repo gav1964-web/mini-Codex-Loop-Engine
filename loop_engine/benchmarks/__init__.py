@@ -15,8 +15,10 @@ from .history_models import (
 from .history_store import JsonBenchmarkHistoryStore
 from .models import (
     BenchmarkAcceptanceCheck,
+    BenchmarkReport,
     ConsolidationBenchmarkReport,
 )
+from .project_audit import run_project_audit_benchmark
 
 __all__ = [
     "BenchmarkAcceptanceCheck",
@@ -24,10 +26,12 @@ __all__ = [
     "BenchmarkConfidencePolicy",
     "BenchmarkConfidenceReport",
     "BenchmarkHistoryEntry",
+    "BenchmarkReport",
     "BenchmarkStrategySnapshot",
     "ConsolidationBenchmarkReport",
     "JsonBenchmarkHistoryStore",
     "StrategyConfidence",
     "run_consolidation_benchmark",
+    "run_project_audit_benchmark",
     "write_benchmark_confidence",
 ]

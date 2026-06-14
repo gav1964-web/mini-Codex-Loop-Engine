@@ -11,6 +11,7 @@ from loop_engine.benchmarks import (
     BenchmarkConfidencePolicy,
     JsonBenchmarkHistoryStore,
     run_consolidation_benchmark,
+    run_project_audit_benchmark,
     write_benchmark_confidence,
 )
 from tools.benchmark_confidence import main as benchmark_confidence_main
@@ -58,7 +59,7 @@ def test_three_consistent_runs_produce_confident_consensus(
     tmp_path,
     benchmark_report,
 ) -> None:
-    store = JsonBenchmarkHistoryStore(tmp_path)
+    store = JsonBenchmarkHistoryStore(tmp_path / "history")
     entries = tuple(
         store.record(
             benchmark_report,
@@ -108,6 +109,25 @@ def test_incompatible_history_fails_closed(
         BenchmarkConfidenceAnalyzer(
             BenchmarkConfidencePolicy(minimum_runs=2)
         ).analyze((first, incompatible))
+
+
+def test_different_benchmark_cases_cannot_share_confidence_history(
+    tmp_path,
+    benchmark_report,
+) -> None:
+    store = JsonBenchmarkHistoryStore(tmp_path)
+    change = store.record(benchmark_report, run_id="change", recorded_at=1)
+    audit_report = run_project_audit_benchmark(
+        tmp_path / "reports" / "audit.json",
+        sample_count=1,
+        read_delay_seconds=0.02,
+    )
+    audit = store.record(audit_report, run_id="audit", recorded_at=2)
+
+    with pytest.raises(ValueError, match="not comparable"):
+        BenchmarkConfidenceAnalyzer(
+            BenchmarkConfidencePolicy(minimum_runs=2)
+        ).analyze((change, audit))
 
 
 def test_confidence_report_writer_and_policy_validation(

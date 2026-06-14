@@ -1,4 +1,4 @@
-"""Real multi-step benchmark for decomposition strategy consolidation."""
+"""Read-only multi-source project audit benchmark."""
 
 from __future__ import annotations
 
@@ -26,15 +26,14 @@ from ..tasks import (
     TaskScheduler,
     TaskSchedulerPolicy,
 )
+from .audit_workspace import ProjectAudit, ProjectAuditWorkspace
 from .models import BenchmarkAcceptanceCheck, ConsolidationBenchmarkReport
-from .workspace import BenchmarkAudit, PythonChangeWorkspace
 
 _CAPABILITIES = {
-    "project.full_change",
-    "project.inspect.source",
-    "project.inspect.tests",
-    "project.apply",
-    "project.verify",
+    "project.audit.full",
+    "project.audit.source",
+    "project.audit.docs",
+    "project.audit.config",
 }
 
 
@@ -44,12 +43,12 @@ class _NamedDecomposer(ScriptedTaskDecomposer):
         self.strategy = strategy
 
 
-class _BenchmarkUsage:
+class _AuditUsage:
     def measure(self, *, strategy, case, graph) -> StrategyUsage:
         estimates = {
-            "monolithic": (900, 180, 900),
-            "parallel_staged": (600, 120, 600),
-            "sequential_staged": (600, 120, 600),
+            "monolithic": (720, 150, 720),
+            "parallel_evidence": (480, 100, 480),
+            "sequential_evidence": (480, 100, 480),
         }
         input_tokens, output_tokens, cost = estimates[strategy]
         return StrategyUsage(
@@ -60,26 +59,26 @@ class _BenchmarkUsage:
         )
 
 
-def run_consolidation_benchmark(
-    output_path: str | Path = "build/consolidation_benchmark/report.json",
+def run_project_audit_benchmark(
+    output_path: str | Path = "build/project_audit_benchmark/report.json",
     *,
     sample_count: int = 3,
     read_delay_seconds: float = 0.04,
 ) -> ConsolidationBenchmarkReport:
-    audits: list[BenchmarkAudit] = []
+    audits: list[ProjectAudit] = []
     work_roots: list[Path] = []
 
     def scheduler_factory(decomposer) -> TaskScheduler:
         strategy = decomposer.strategy
-        root = Path(tempfile.mkdtemp(prefix=f"loop-{strategy}-"))
+        root = Path(tempfile.mkdtemp(prefix=f"audit-{strategy}-"))
         work_roots.append(root)
-        workspace = PythonChangeWorkspace(
+        workspace = ProjectAuditWorkspace(
             root,
             strategy=strategy,
             read_delay_seconds=read_delay_seconds,
         )
         resolver = InMemoryCapabilityResolver(
-            _CAPABILITIES - {"project.inspect.tests"}
+            _CAPABILITIES - {"project.audit.docs"}
         )
 
         def acquire(capability, node, graph):
@@ -90,46 +89,48 @@ def run_consolidation_benchmark(
 
         def execute(node, graph):
             capability = node.required_capabilities[0]
-            if capability == "project.full_change":
-                workspace.inspect_source()
-                workspace.inspect_tests()
-                workspace.apply_change()
-                verification = workspace.verify()
-                audits.append(
-                    workspace.audit(
-                        verification_passed=verification["passed"]
-                    )
-                )
+            if capability == "project.audit.full":
+                evidence = workspace.verify()
+                audits.append(workspace.audit(verified=evidence["passed"]))
                 return _result(
-                    verification["passed"],
-                    "monolithic project change completed",
-                    verification,
+                    evidence["passed"],
+                    "monolithic project audit completed",
+                    evidence,
                 )
             operations = {
-                "project.inspect.source": workspace.inspect_source,
-                "project.inspect.tests": workspace.inspect_tests,
-                "project.apply": workspace.apply_change,
-                "project.verify": workspace.verify,
+                "project.audit.source": workspace.inspect_source,
+                "project.audit.docs": workspace.inspect_docs,
+                "project.audit.config": workspace.inspect_config,
             }
-            evidence = operations[capability]()
-            passed = evidence.get("passed", True)
             return _result(
-                passed,
+                True,
                 f"{capability} completed",
-                evidence,
+                operations[capability](),
             )
 
         def integrate(node, graph):
-            verification = workspace.verify()
-            audits.append(
-                workspace.audit(
-                    verification_passed=verification["passed"]
+            children = [
+                graph.nodes[child_id].result.evidence
+                for child_id in node.children
+                if graph.nodes[child_id].result is not None
+            ]
+            combined = {
+                key: value
+                for evidence in children
+                for key, value in evidence.items()
+            }
+            passed = all(
+                (
+                    combined.get("has_normalize"),
+                    combined.get("documents_check_command"),
+                    combined.get("requires_python_311"),
                 )
             )
+            audits.append(workspace.audit(verified=passed))
             return _result(
-                verification["passed"],
-                "integrated project change verified",
-                verification,
+                passed,
+                "integrated project audit verified",
+                {"passed": passed, **combined},
             )
 
         return TaskScheduler(
@@ -144,12 +145,12 @@ def run_consolidation_benchmark(
     try:
         comparison = DecompositionStrategyRunner(
             scheduler_factory,
-            usage_provider=_BenchmarkUsage(),
+            usage_provider=_AuditUsage(),
             sampling_policy=StrategySamplingPolicy(sample_count=sample_count),
         ).compare(_case(), _strategies())
         ranking = LexicographicStrategyJudge(_judge_policy()).rank(comparison)
         report = ConsolidationBenchmarkReport(
-            benchmark="python-project-change",
+            benchmark="python-project-audit",
             comparison=comparison,
             ranking=ranking,
             checks=_acceptance_checks(
@@ -168,77 +169,74 @@ def run_consolidation_benchmark(
 
 def _case() -> ReplayTaskCase:
     return ReplayTaskCase(
-        name="python-project-change",
-        goal="Add a mean function to a Python calculator and verify the project",
+        name="python-project-audit",
+        goal="Audit source, documentation, and configuration evidence",
         success_criteria=(
-            "source and tests are inspected",
-            "the bounded source change is applied",
-            "the complete unittest suite passes",
+            "source behavior is identified",
+            "verification command is documented",
+            "Python version policy is identified",
         ),
-        required_capabilities=("project.full_change",),
-        budget=TaskBudget(max_nodes=8, max_depth=2, max_leaf_executions=6),
+        required_capabilities=("project.audit.full",),
+        budget=TaskBudget(max_nodes=6, max_depth=2, max_leaf_executions=4),
     )
 
 
 def _strategies():
-    inspect_source = ChildTaskSpec(
-        key="inspect_source",
-        goal="Inspect calculator source",
-        required_capabilities=["project.inspect.source"],
+    source = ChildTaskSpec(
+        key="source",
+        goal="Inspect source behavior",
+        required_capabilities=["project.audit.source"],
     )
-    inspect_tests = ChildTaskSpec(
-        key="inspect_tests",
-        goal="Inspect calculator tests",
-        required_capabilities=["project.inspect.tests"],
+    docs = ChildTaskSpec(
+        key="docs",
+        goal="Inspect documented verification",
+        required_capabilities=["project.audit.docs"],
     )
-    apply = ChildTaskSpec(
-        key="apply",
-        goal="Add the bounded mean function",
-        required_capabilities=["project.apply"],
-        depends_on=["inspect_source", "inspect_tests"],
+    config = ChildTaskSpec(
+        key="config",
+        goal="Inspect Python version policy",
+        required_capabilities=["project.audit.config"],
     )
-    verify = ChildTaskSpec(
-        key="verify",
-        goal="Run the complete unittest suite",
-        required_capabilities=["project.verify"],
-        depends_on=["apply"],
+    sequential_docs = ChildTaskSpec(
+        key="docs",
+        goal=docs.goal,
+        required_capabilities=docs.required_capabilities,
+        depends_on=["source"],
     )
-    sequential_tests = ChildTaskSpec(
-        key="inspect_tests",
-        goal=inspect_tests.goal,
-        required_capabilities=inspect_tests.required_capabilities,
-        depends_on=["inspect_source"],
+    sequential_config = ChildTaskSpec(
+        key="config",
+        goal=config.goal,
+        required_capabilities=config.required_capabilities,
+        depends_on=["docs"],
     )
     return {
         "monolithic": lambda: _NamedDecomposer("monolithic", {}),
-        "parallel_staged": lambda: _NamedDecomposer(
-            "parallel_staged",
-            {"root": [inspect_source, inspect_tests, apply, verify]},
+        "parallel_evidence": lambda: _NamedDecomposer(
+            "parallel_evidence",
+            {"root": [source, docs, config]},
         ),
-        "sequential_staged": lambda: _NamedDecomposer(
-            "sequential_staged",
-            {"root": [inspect_source, sequential_tests, apply, verify]},
+        "sequential_evidence": lambda: _NamedDecomposer(
+            "sequential_evidence",
+            {"root": [source, sequential_docs, sequential_config]},
         ),
     }
 
 
 def _scheduler_policy(root: Path) -> TaskSchedulerPolicy:
-    source = root / "calculator.py"
-    tests = root / "test_calculator.py"
     return TaskSchedulerPolicy.create(
-        max_parallel_leaves=2,
+        max_parallel_leaves=3,
         parallel_safe_capabilities=_CAPABILITIES,
-        mutation_capabilities={"project.full_change", "project.apply"},
         resource_claims={
-            "root": [ResourceClaim.workspace(root, mode="write")],
-            "root.inspect_source": [
-                ResourceClaim.workspace(source, mode="read")
+            "root": [ResourceClaim.workspace(root, mode="read")],
+            "root.source": [
+                ResourceClaim.workspace(root / "app.py", mode="read")
             ],
-            "root.inspect_tests": [
-                ResourceClaim.workspace(tests, mode="read")
+            "root.docs": [
+                ResourceClaim.workspace(root / "README.md", mode="read")
             ],
-            "root.apply": [ResourceClaim.workspace(source, mode="write")],
-            "root.verify": [ResourceClaim.workspace(root, mode="read")],
+            "root.config": [
+                ResourceClaim.workspace(root / "pyproject.toml", mode="read")
+            ],
         },
     )
 
@@ -260,59 +258,57 @@ def _result(passed: bool, summary: str, evidence: dict) -> LeafExecutionResult:
         status="completed" if passed else "failed",
         summary=summary,
         evidence=evidence,
-        error=None if passed else "benchmark_verification_failed",
+        error=None if passed else "project_audit_verification_failed",
     )
 
 
 def _acceptance_checks(
     comparison,
     winners: tuple[str, ...],
-    audits: list[BenchmarkAudit],
+    audits: list[ProjectAudit],
     sample_count: int,
 ) -> tuple[BenchmarkAcceptanceCheck, ...]:
     by_strategy = {
         strategy: [audit for audit in audits if audit.strategy == strategy]
         for strategy in _strategies()
     }
-    completed = all(run.root_status == "completed" for run in comparison.runs)
-    verified = all(audit.verification_passed for audit in audits)
     coverage = all(
         len(strategy_audits) == sample_count
         for strategy_audits in by_strategy.values()
     )
     acquired = all(
-        audit.acquired_capabilities == ("project.inspect.tests",)
-        for strategy in ("parallel_staged", "sequential_staged")
+        audit.acquired_capabilities == ("project.audit.docs",)
+        for strategy in ("parallel_evidence", "sequential_evidence")
         for audit in by_strategy[strategy]
     )
     overlap = all(
         audit.independent_reads_overlapped
-        for audit in by_strategy["parallel_staged"]
+        for audit in by_strategy["parallel_evidence"]
     )
     return (
         BenchmarkAcceptanceCheck(
             "all_strategies_completed",
-            completed,
-            "every strategy reached completed root status",
+            all(run.root_status == "completed" for run in comparison.runs),
+            "every audit strategy reached completed root status",
         ),
         BenchmarkAcceptanceCheck(
-            "isolated_workspaces_verified",
-            verified and coverage,
-            f"{len(audits)} isolated runs passed the real unittest suite",
+            "read_only_evidence_verified",
+            coverage and all(audit.verified for audit in audits),
+            f"{len(audits)} isolated project audits verified expected evidence",
         ),
         BenchmarkAcceptanceCheck(
             "capability_acquisition_exercised",
-            acquired and coverage,
-            "staged strategies acquired project.inspect.tests",
+            coverage and acquired,
+            "evidence strategies acquired project.audit.docs",
         ),
         BenchmarkAcceptanceCheck(
             "parallel_execution_observed",
-            overlap and coverage,
-            "parallel strategy overlapped independent source and test reads",
+            coverage and overlap,
+            "parallel strategy overlapped three independent reads",
         ),
         BenchmarkAcceptanceCheck(
             "parallel_strategy_ranked_first",
-            winners == ("parallel_staged",),
+            winners == ("parallel_evidence",),
             f"ranking winners: {','.join(winners)}",
         ),
     )

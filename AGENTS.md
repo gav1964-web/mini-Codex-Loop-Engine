@@ -87,6 +87,9 @@ This project is a universal loop engine, not a coding-agent implementation.
   repeated samples inside one run do not count as independent history.
 - Benchmark history entries must share case, strategy set, and judge-policy
   fingerprint or confidence analysis must fail closed.
+- Independent benchmark cases must keep separate history and confidence
+  artifacts. Cross-case analysis may compare explicit strategy roles only,
+  never raw case-specific rank or policy values.
 - Token and cost metrics must come from an explicit typed usage provider, never
   inferred from task metadata or hidden provider pricing.
 - Cost objectives require measured values with one comparable cost basis across

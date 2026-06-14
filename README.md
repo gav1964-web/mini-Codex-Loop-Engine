@@ -164,6 +164,7 @@ state = engine.run(definition)
 - measured latency and externally supplied token/cost strategy evidence;
 - bounded repeated latency samples with median and MAD evidence;
 - real isolated Python-project consolidation benchmark with acceptance checks;
+- independent read-only project-audit benchmark with parallel evidence gathering;
 - immutable benchmark history with confidence-aware consensus ranking;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
@@ -183,24 +184,30 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.35.0` adds immutable benchmark history and confidence-aware
-consensus ranking. Independent compatible benchmark reports are archived as
-small versioned snapshots containing strategy ranks, winners, latency, case,
-and a policy fingerprint.
+Version `0.36.0` adds a second independent benchmark case:
+`python-project-audit`. It performs a real read-only audit across source,
+documentation, and project configuration, acquires a missing documentation
+capability, verifies integrated child evidence, and proves that three admitted
+reads actually overlap in the parallel strategy.
 
-The analyzer uses a bounded history window and reports `insufficient_history`,
-`low_confidence`, or `confident`. Consensus is derived from cumulative rank;
-confidence additionally requires successful acceptance runs, a unique winner,
-and the externally configured minimum first-place share. Internal latency
-samples remain distinct from independent benchmark runs.
+`BenchmarkReport` now carries an explicit benchmark identity. History snapshots
+derive that identity from the report instead of hard-coding one case. The
+confidence CLI selects a case explicitly and keeps default reports, histories,
+and confidence outputs in separate case directories.
 
-Run and archive a benchmark, then analyze the accumulated history with:
+Run either benchmark through the history workflow:
 
 ```bash
-python -m tools.benchmark_confidence --run
+python -m tools.benchmark_confidence --run --case python-project-change
+python -m tools.benchmark_confidence --run --case python-project-audit
 ```
 
-The standalone benchmark remains `python -m examples.consolidation_benchmark`.
+Standalone examples remain:
+
+```bash
+python -m examples.consolidation_benchmark
+python -m examples.project_audit_benchmark
+```
 
 The complete production gate remains `python -m tools.release_gate`.
 
