@@ -1352,6 +1352,59 @@ Failure одного stage не стирает результаты осталь
 build/release_gate/report.json
 ```
 
+### Release History и Regression Trends
+
+В `0.31.0` canonical `tools.release_gate` после формирования основного report
+архивирует immutable snapshot:
+
+```text
+build/release_history/runs/<release_id>.json
+```
+
+Snapshot имеет собственный versioned envelope и содержит полный
+`CompositeReleaseGateReport`. `release_id` path-safe, запись атомарна, listing
+ограничен диапазоном 1..100 и сортируется newest-first.
+
+`ReleaseHistoryAnalyzer` сравнивает newest release с bounded rolling window
+предыдущих запусков. По умолчанию окно равно пяти. Status precedence:
+
+```text
+failed < degraded < passed
+```
+
+Понижение общего gate status или status отдельной stage всегда является
+регрессией. Duration stage сравнивается с median предыдущего окна и считается
+регрессией только при выполнении обоих условий:
+
+```text
+current / median >= duration_ratio
+current - median >= duration_absolute_seconds
+```
+
+Default thresholds: `1.25` и `1.0` секунды. Двойной threshold уменьшает шум на
+коротких стадиях. Trend report содержит baseline ids, status transition,
+regression reasons и per-stage current/median/delta/ratio.
+
+Первый snapshot получает status `insufficient_history`. Без regressions status
+равен `stable` или `improved`; обнаруженная regression даёт `regressed`.
+
+Canonical workflow:
+
+```bash
+python -m tools.release_gate
+python -m tools.release_trends
+```
+
+Trend сохраняется атомарно в:
+
+```text
+build/release_history/trend.json
+```
+
+`tools.release_trends` по умолчанию только анализирует архив. Явный
+`--record-report PATH` импортирует внешний report, который не был сохранён
+canonical gate. CLI возвращает exit code `1` только для `regressed`.
+
 Standalone `python -m tools.sandbox_release_gate` сохраняется для быстрой
 изолированной диагностики sandbox backend.
 
@@ -1467,6 +1520,5 @@ Loop Engine
 
 ## Следующий этап
 
-1. Release-history comparison и regression trends.
-2. Optional fencing tokens для опасных resource adapters.
-3. Repeated-sample statistics для noisy latency measurements.
+1. Optional fencing tokens для опасных resource adapters.
+2. Repeated-sample statistics для noisy latency measurements.

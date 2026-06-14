@@ -82,6 +82,8 @@ def main() -> int:
                     f"sys.path.insert(0, {str(target)!r});"
                     "from loop_engine.adapters import FileResourceLeaseManager;"
                     "from loop_engine.release_gate import CompositeReleaseGate;"
+                    "from loop_engine.release_history import ("
+                    "JsonReleaseHistoryStore,ReleaseHistoryAnalyzer);"
                     "from loop_engine.tasks import ("
                     "ResourceLease,StrategyMetrics,StrategyUsage);"
                     "print('wheel-smoke-ok')"

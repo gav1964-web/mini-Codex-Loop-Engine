@@ -60,6 +60,7 @@ mini-Codex 7, а извлекает из неё общую идею управл
 - identity-safe stale process reaper;
 - bounded periodic process-reaper service;
 - persistent provider-neutral service-run reports;
+- persistent release history и bounded regression trends;
 - bounded terminal-record retention policy;
 - command digest persistence без raw argv;
 - bounded parallel execution independent ready leaves;
@@ -518,6 +519,15 @@ JSON store проверяет path-safe identifiers, поддерживает bo
 listing и возвращает immutable snapshots. Если явно настроенная persistence
 недоступна, service run завершается видимой ошибкой, а не теряет observability
 молча.
+
+Версия `0.31.0` архивирует каждый canonical composite release report и строит
+deterministic trends по bounded rolling window. Status downgrade считается
+регрессией безусловно; duration regression требует одновременно относительного
+и абсолютного превышения rolling median.
+
+Trend CLI работает analyze-only по умолчанию, поэтому не дублирует snapshot,
+уже сохранённый release gate. Внешний report импортируется только явным
+`--record-report`.
 
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или

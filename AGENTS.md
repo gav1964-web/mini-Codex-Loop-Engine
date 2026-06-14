@@ -110,6 +110,10 @@ This project is a universal loop engine, not a coding-agent implementation.
   strict mode and require status `passed` with every isolation check true.
 - Canonical release validation must run pytest, wheel build/install/import, and
   the strict sandbox gate as independent bounded stages and retain every result.
+- Canonical release runs must archive immutable versioned snapshots. Trend
+  analysis must use a bounded prior window and deterministic thresholds.
+- Release latency is a regression only when both configured relative and
+  absolute thresholds are exceeded; status downgrades remain regressions.
 - A failed release stage must not short-circuit later evidence collection.
 - Composite release status may be `passed` only when every required stage
   passes; explicit sandbox degradation must remain visibly `degraded`.

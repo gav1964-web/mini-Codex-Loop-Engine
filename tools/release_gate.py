@@ -12,6 +12,7 @@ from loop_engine.release_gate import (
     CompositeReleaseGatePolicy,
     ReleaseCommand,
 )
+from loop_engine.release_history import JsonReleaseHistoryStore
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -26,6 +27,11 @@ def _parser() -> argparse.ArgumentParser:
         default=Path("build/release_gate/report.json"),
     )
     parser.add_argument("--degraded-ok", action="store_true")
+    parser.add_argument(
+        "--history-root",
+        type=Path,
+        default=Path("build/release_history/runs"),
+    )
     return parser
 
 
@@ -68,6 +74,10 @@ def main() -> int:
     report = CompositeReleaseGate(policy).run(
         degraded_ok=args.degraded_ok
     )
+    JsonReleaseHistoryStore(
+        args.history_root,
+        workspace_root=workspace,
+    ).record(report)
     print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
     return 0 if report.releasable else 1
 

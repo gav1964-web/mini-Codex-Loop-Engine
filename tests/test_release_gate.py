@@ -8,6 +8,7 @@ import pytest
 from loop_engine.release_gate import (
     CompositeReleaseGate,
     CompositeReleaseGatePolicy,
+    CompositeReleaseGateReport,
     ReleaseCommand,
 )
 from loop_engine.sandbox_release_gate import REQUIRED_SANDBOX_CHECKS
@@ -95,6 +96,7 @@ def test_all_stages_pass_and_write_atomic_report(tmp_path) -> None:
     assert json.loads(policy.report_path.read_text(encoding="utf-8")) == (
         report.to_dict()
     )
+    assert CompositeReleaseGateReport.from_dict(report.to_dict()) == report
 
 
 def test_failure_does_not_short_circuit_later_stages(tmp_path) -> None:
@@ -252,3 +254,15 @@ def test_policy_contracts_reject_invalid_bounds_and_external_report(
             sandbox=ReleaseCommand(argv=_sandbox_command(), timeout_seconds=1),
             report_path=tmp_path.parent / "report.json",
         )
+
+
+def test_report_loader_rejects_unknown_schema_or_stage_shape(tmp_path) -> None:
+    payload = CompositeReleaseGate(_policy(tmp_path)).run().to_dict()
+    payload["schema_version"] = 999
+    with pytest.raises(ValueError, match="schema version"):
+        CompositeReleaseGateReport.from_dict(payload)
+
+    payload = CompositeReleaseGate(_policy(tmp_path)).run().to_dict()
+    payload["stages"] = payload["stages"][:-1]
+    with pytest.raises(ValueError, match="stages"):
+        CompositeReleaseGateReport.from_dict(payload)

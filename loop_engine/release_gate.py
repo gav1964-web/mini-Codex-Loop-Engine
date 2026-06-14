@@ -7,7 +7,7 @@ import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from .adapters import BoundedSubprocessTool, SubprocessSpec
 from .models import LoopDefinition, LoopState
@@ -72,6 +72,25 @@ class ReleaseStageReport:
     error: str | None = None
     details: dict[str, Any] | None = None
 
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> ReleaseStageReport:
+        return cls(
+            name=str(value["name"]),
+            status=str(value["status"]),
+            releasable=bool(value["releasable"]),
+            exit_code=value.get("exit_code"),
+            timed_out=bool(value["timed_out"]),
+            stdout_truncated=bool(value["stdout_truncated"]),
+            stderr_truncated=bool(value["stderr_truncated"]),
+            duration_seconds=float(value["duration_seconds"]),
+            error=value.get("error"),
+            details=(
+                dict(value["details"])
+                if value.get("details") is not None
+                else None
+            ),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class CompositeReleaseGateReport:
@@ -88,6 +107,32 @@ class CompositeReleaseGateReport:
         payload = asdict(self)
         payload["stages"] = [asdict(stage) for stage in self.stages]
         return payload
+
+    @classmethod
+    def from_dict(
+        cls,
+        value: Mapping[str, Any],
+    ) -> CompositeReleaseGateReport:
+        version = int(value["schema_version"])
+        if version != RELEASE_GATE_SCHEMA_VERSION:
+            raise ValueError(f"unsupported release gate schema version: {version}")
+        stages = tuple(
+            ReleaseStageReport.from_dict(dict(stage))
+            for stage in value.get("stages", [])
+        )
+        names = tuple(stage.name for stage in stages)
+        if names != REQUIRED_RELEASE_STAGES:
+            raise ValueError("release gate report stages do not match contract")
+        return cls(
+            schema_version=version,
+            status=str(value["status"]),
+            releasable=bool(value["releasable"]),
+            degraded=bool(value["degraded"]),
+            started_at=float(value["started_at"]),
+            finished_at=float(value["finished_at"]),
+            stages=stages,
+            error=value.get("error"),
+        )
 
 
 class CompositeReleaseGate:

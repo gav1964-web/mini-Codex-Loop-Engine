@@ -166,6 +166,7 @@ state = engine.run(definition)
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
 - strict automated release gate for the real sandbox backend;
 - composite bounded release gate for pytest, wheel smoke, and sandbox evidence;
+- persistent release history with bounded rolling-median regression trends;
 - bounded parent integration commands and status propagation;
 - external routing and all-of composition for parent integration checks;
 - typed structural selectors for reusable parent integration routes;
@@ -178,22 +179,23 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.30.0` adds provider-neutral persistent service-run observability.
-`ServiceRunReport` carries a stable run identity, status, stop reason,
-timestamps, numeric metrics, structured details, and an optional error.
+Version `0.31.0` adds persistent release history and deterministic regression
+trends. Every canonical `tools.release_gate` run archives its complete report
+under `build/release_history/runs/`.
 
-`JsonServiceRunReportStore` writes versioned reports atomically under
-`<root>/<service>/<run_id>.json`, validates path-safe identifiers, supports
-bounded newest-first listing, and reconstructs immutable report snapshots.
-`ProcessReaperService` accepts the generic `ServiceRunReportSink` protocol and
-publishes cycle, reaping, termination, loss, and pruning metrics. A configured
-sink failure makes the service run explicitly failed.
+`tools.release_trends` compares the newest run with a bounded rolling window.
+Gate or stage status downgrades are regressions. Stage duration is a regression
+only when it exceeds both the configured median ratio and absolute delta, which
+avoids noisy alerts for very short stages.
 
-Run the persistent service example with:
+Analyze the archived history with:
 
 ```bash
-python -m examples.process_reaper_service_demo
+python -m tools.release_trends
 ```
+
+Use `--record-report PATH` only to import a report that was not produced by the
+canonical gate.
 
 The complete production gate remains `python -m tools.release_gate`.
 
