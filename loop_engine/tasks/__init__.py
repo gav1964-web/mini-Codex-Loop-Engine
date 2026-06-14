@@ -67,8 +67,10 @@ from .resource_leases import (
 )
 from .retry import (
     CancellableRetryWaiter,
+    RetryClock,
     RetryDecision,
     RetryWaiter,
+    SystemRetryClock,
     TaskRetryPolicy,
 )
 from .replay import (
@@ -143,6 +145,7 @@ __all__ = [
     "ResourceLease",
     "ResourceLeaseAttempt",
     "ResourceLeaseManager",
+    "RetryClock",
     "RetryDecision",
     "RetryWaiter",
     "run_fenced_operation",
@@ -165,6 +168,7 @@ __all__ = [
     "StrategyObjective",
     "StrategyRank",
     "StrategyRanking",
+    "SystemRetryClock",
     "ValidatedLLMTaskDecomposer",
     "WslBubblewrapSandbox",
     "build_task_demo",

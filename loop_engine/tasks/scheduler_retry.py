@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from .events import record_task_event
 from .models import LeafExecutionResult, TaskGraph, TaskNode, TaskStatus
 from .retry import (
@@ -80,11 +82,27 @@ class TaskSchedulerRetry:
         node: TaskNode,
         result: LeafExecutionResult,
     ) -> None:
-        decision = evaluate_retry(self.retry_policy, node, result)
-        if decision.retry and not self._wait_for_retry(
-            graph, node, result, decision
-        ):
-            decision = RetryDecision(False, "retry_wait_cancelled")
+        try:
+            now = self.retry_clock.now()
+        except Exception:
+            now = 0.0
+            decision = RetryDecision(False, "retry_clock_error")
+        else:
+            decision = evaluate_retry(
+                self.retry_policy,
+                node,
+                result,
+                graph_id=graph.id,
+                now=now,
+            )
+        if decision.retry and node.retry_started_at is None:
+            node.retry_started_at = now
+        if decision.retry:
+            wait_rejection = self._wait_for_retry(
+                graph, node, result, decision
+            )
+            if wait_rejection is not None:
+                decision = RetryDecision(False, wait_rejection)
         if decision.retry:
             node.retries += 1
             node.status = TaskStatus.READY
@@ -115,12 +133,12 @@ class TaskSchedulerRetry:
         node: TaskNode,
         result: LeafExecutionResult,
         decision: RetryDecision,
-    ) -> bool:
+    ) -> str | None:
         delay = decision.delay_seconds
         if delay <= 0:
-            return True
+            return None
         if self.retry_waiter is None:
-            return False
+            return "retry_wait_cancelled"
         payload = {
             "delay_seconds": delay,
             "retry_code": result.retry_code,
@@ -139,13 +157,47 @@ class TaskSchedulerRetry:
                 **payload,
                 "error": f"{type(exc).__name__}:{exc}",
             }
+        rejection = None
+        if completed:
+            rejection = self._retry_deadline_rejection(node)
+            if rejection is not None:
+                completed = False
+                payload = {**payload, "deadline_rejection": rejection}
         record_task_event(
             graph,
             "leaf_retry_wait_completed",
             node.id,
             {**payload, "completed": completed},
         )
-        return completed
+        if completed:
+            return None
+        return rejection or "retry_wait_cancelled"
+
+    def _retry_deadline_rejection(self, node: TaskNode) -> str | None:
+        window = (
+            self.retry_policy.max_retry_elapsed_seconds
+            if self.retry_policy is not None
+            else None
+        )
+        if window is None or node.retry_started_at is None:
+            return None
+        try:
+            now = self.retry_clock.now()
+            elapsed = now - node.retry_started_at
+        except Exception:
+            return "retry_clock_error"
+        if (
+            not isinstance(now, (int, float))
+            or isinstance(now, bool)
+            or not math.isfinite(now)
+            or not math.isfinite(elapsed)
+        ):
+            return "retry_clock_invalid"
+        if elapsed < 0:
+            return "retry_clock_regressed"
+        if elapsed > window:
+            return "retry_elapsed_budget_exhausted"
+        return None
 
     @staticmethod
     def _finish_leaf_blocked(

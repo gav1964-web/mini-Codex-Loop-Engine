@@ -100,6 +100,10 @@ This project is a universal loop engine, not a coding-agent implementation.
   metadata and leaf executors may request retry but must not authorize it.
 - Retry delay must come from immutable external policy and run through an
   injected cancellable waiter. The scheduler must not call an unbounded sleep.
+- Persistent retry deadlines must use an injected epoch clock and survive task
+  graph resume. Clock failure or regression must reject retry fail-closed.
+- Retry jitter must be deterministic from immutable policy seed and stable
+  graph/node identity; do not use process-global randomness.
 - Lease contention may be retried only through the same explicit retry
   authority. It must not consume a leaf execution attempt, and no lease may be
   held while waiting between acquisitions.

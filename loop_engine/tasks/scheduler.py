@@ -31,7 +31,9 @@ from .resource_leases import (
     run_leased_operation,
 )
 from .retry import (
+    RetryClock,
     RetryWaiter,
+    SystemRetryClock,
     TaskRetryPolicy,
 )
 from .scheduler_propagation import TaskSchedulerPropagation
@@ -52,6 +54,7 @@ class TaskScheduler(TaskSchedulerRetry, TaskSchedulerPropagation):
         resource_lease_manager: ResourceLeaseManager | None = None,
         retry_policy: TaskRetryPolicy | None = None,
         retry_waiter: RetryWaiter | None = None,
+        retry_clock: RetryClock | None = None,
     ) -> None:
         self.decomposer = decomposer
         self.capability_resolver = capability_resolver
@@ -63,6 +66,7 @@ class TaskScheduler(TaskSchedulerRetry, TaskSchedulerPropagation):
         self.resource_lease_manager = resource_lease_manager
         self.retry_policy = retry_policy
         self.retry_waiter = retry_waiter
+        self.retry_clock = retry_clock or SystemRetryClock()
 
     def run(self, graph: TaskGraph) -> TaskGraph:
         validate_task_graph(graph)

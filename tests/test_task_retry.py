@@ -170,11 +170,12 @@ def test_retryable_result_persists_without_losing_contract(tmp_path) -> None:
     payload = json.loads(
         (tmp_path / "retry-contract.json").read_text(encoding="utf-8")
     )
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert payload["graph"]["nodes"]["root"]["retries"] == 0
+    assert payload["graph"]["nodes"]["root"]["retry_started_at"] is None
 
 
-@pytest.mark.parametrize("schema_version", [1, 2])
+@pytest.mark.parametrize("schema_version", [1, 2, 3])
 def test_task_graph_loader_accepts_legacy_schemas(
     tmp_path, schema_version
 ) -> None:

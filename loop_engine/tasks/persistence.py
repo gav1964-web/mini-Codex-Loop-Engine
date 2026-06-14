@@ -8,8 +8,8 @@ from pathlib import Path
 
 from .models import TaskGraph, TaskStatus
 
-TASK_GRAPH_SCHEMA_VERSION = 3
-SUPPORTED_TASK_GRAPH_SCHEMA_VERSIONS = frozenset({1, 2, 3})
+TASK_GRAPH_SCHEMA_VERSION = 4
+SUPPORTED_TASK_GRAPH_SCHEMA_VERSIONS = frozenset({1, 2, 3, 4})
 _GRAPH_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 

@@ -102,6 +102,7 @@ class TaskNode:
     depth: int = 0
     attempts: int = 0
     retries: int = 0
+    retry_started_at: float | None = None
     result: LeafExecutionResult | None = None
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)

@@ -187,6 +187,17 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
+Version `0.41.0` adds a persistent elapsed-time retry deadline and deterministic
+jitter. `TaskRetryPolicy.max_retry_elapsed_seconds` bounds the complete retry
+window across waits, executions, checkpoints, and process resume. An injected
+epoch `RetryClock` makes the contract testable; clock failure or regression
+rejects retry.
+
+`max_jitter_seconds` requires an explicit immutable `jitter_seed`. The delay
+offset is derived with SHA-256 from the seed, graph id, node id, and retry
+index. Separate scheduler identities can therefore avoid synchronized lease
+reacquisition while each run remains reproducible.
+
 Version `0.40.0` adds external cancellable retry backoff and bounded recovery
 from cross-process resource lease contention. Backoff never uses an implicit
 sleep: `TaskScheduler` receives a `RetryWaiter`, while delay values remain in
