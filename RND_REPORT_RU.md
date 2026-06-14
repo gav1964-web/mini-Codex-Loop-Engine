@@ -556,6 +556,15 @@ acquisition port. Parallel strategy обязана подтвердить фак
 независимых чтений. Versioned report объединяет comparison, external ranking и
 acceptance checks; benchmark не добавляет decision logic в scheduler.
 
+Версия `0.35.0` добавляет immutable benchmark history и confidence-aware
+consensus. Snapshot фиксирует policy fingerprint, strategy ranks, winners и
+latency, а analyzer принимает только совместимые runs в bounded окне.
+
+Consensus строится по cumulative rank, но статус `confident` требует minimum
+числа независимых runs, успешного acceptance каждого run, unique winner и
+достаточной first-place share. Latency samples внутри одного run не считаются
+независимой историей.
+
 Recovery не обещает exactly-once для action, оборванного внутри внешнего side
 effect до записи checkpoint. Такие tools должны быть идемпотентными или
 использовать idempotency key.

@@ -164,6 +164,7 @@ state = engine.run(definition)
 - measured latency and externally supplied token/cost strategy evidence;
 - bounded repeated latency samples with median and MAD evidence;
 - real isolated Python-project consolidation benchmark with acceptance checks;
+- immutable benchmark history with confidence-aware consensus ranking;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
@@ -182,22 +183,24 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.34.0` adds a consolidation benchmark that exercises the public task
-runtime on a real isolated Python project. It compares monolithic, sequential,
-and parallel decomposition strategies while performing actual file reads,
-a bounded source change, capability acquisition, resource-claim admission,
-`unittest` execution, parent integration verification, repeated sampling, and
-external policy-driven ranking.
+Version `0.35.0` adds immutable benchmark history and confidence-aware
+consensus ranking. Independent compatible benchmark reports are archived as
+small versioned snapshots containing strategy ranks, winners, latency, case,
+and a policy fingerprint.
 
-The versioned report combines comparison evidence, ranking, and explicit
-acceptance checks. Temporary workspaces are removed after every run; the report
-is written under ignored `build/` output.
+The analyzer uses a bounded history window and reports `insufficient_history`,
+`low_confidence`, or `confident`. Consensus is derived from cumulative rank;
+confidence additionally requires successful acceptance runs, a unique winner,
+and the externally configured minimum first-place share. Internal latency
+samples remain distinct from independent benchmark runs.
 
-Run it with:
+Run and archive a benchmark, then analyze the accumulated history with:
 
 ```bash
-python -m examples.consolidation_benchmark
+python -m tools.benchmark_confidence --run
 ```
+
+The standalone benchmark remains `python -m examples.consolidation_benchmark`.
 
 The complete production gate remains `python -m tools.release_gate`.
 

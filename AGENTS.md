@@ -83,6 +83,10 @@ This project is a universal loop engine, not a coding-agent implementation.
   comparison must fail closed.
 - Consolidation benchmarks must consume public runtime ports, use isolated
   workspaces, verify real outcomes, and keep cost/ranking policy external.
+- Confidence analysis must aggregate immutable independent benchmark runs;
+  repeated samples inside one run do not count as independent history.
+- Benchmark history entries must share case, strategy set, and judge-policy
+  fingerprint or confidence analysis must fail closed.
 - Token and cost metrics must come from an explicit typed usage provider, never
   inferred from task metadata or hidden provider pricing.
 - Cost objectives require measured values with one comparable cost basis across

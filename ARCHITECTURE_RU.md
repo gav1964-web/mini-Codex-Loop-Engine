@@ -1163,6 +1163,65 @@ python -m examples.consolidation_benchmark
 build/consolidation_benchmark/report.json
 ```
 
+### Benchmark History и Confidence Ranking
+
+В `0.35.0` repeated samples одного strategy comparison отделены от независимых
+benchmark runs:
+
+```text
+one benchmark run
+  -> odd latency samples per strategy
+  -> one comparison + one ranking + acceptance
+
+multiple compatible benchmark runs
+  -> immutable compact snapshots
+  -> bounded history window
+  -> confidence-aware consensus report
+```
+
+`JsonBenchmarkHistoryStore` сохраняет только устойчивый projection report:
+
+- benchmark и case identity;
+- acceptance verdict;
+- SHA-256 внешней judge policy;
+- одинаковый упорядоченный набор strategies;
+- rank, eligibility и median latency каждой strategy;
+- winners текущего run.
+
+Snapshots immutable, имеют path-safe run id, versioned envelope и newest-first
+bounded listing. Analyzer fail-closed отклоняет историю с другой policy, case
+или набором strategies.
+
+Consensus определяется минимальным cumulative rank sum. Это не заменяет
+единичный `LexicographicStrategyJudge`: history analyzer агрегирует уже
+полученные rankings и не получает доступ к scheduler.
+
+Внешняя `BenchmarkConfidencePolicy` задаёт:
+
+- bounded history window;
+- minimum independent run count;
+- minimum first-place share в basis points.
+
+Статусы confidence report:
+
+- `insufficient_history` - независимых runs меньше policy minimum;
+- `low_confidence` - есть failed acceptance, tie или недостаточная доля побед;
+- `confident` - все runs passed, consensus winner один и threshold достигнут.
+
+Для каждой strategy сохраняются first-place count/share, cumulative и average
+rank, median latency и latency MAD по независимым runs. CLI:
+
+```bash
+python -m tools.benchmark_confidence --run
+```
+
+Canonical artifacts:
+
+```text
+build/consolidation_benchmark/history/<run_id>.json
+build/consolidation_benchmark/confidence.json
+```
+
 ### Capability Acquisition
 
 ```text
@@ -1614,5 +1673,5 @@ Loop Engine
 
 ## Следующий этап
 
-1. Confidence-aware ranking поверх накопленных benchmark runs.
-2. Несколько независимых benchmark cases вместо одного Python-change fixture.
+1. Несколько независимых benchmark cases вместо одного Python-change fixture.
+2. Cross-case strategy profile без смешивания несовместимых judge policies.
