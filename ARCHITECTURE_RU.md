@@ -1390,6 +1390,91 @@ python -m tools.benchmark_confidence --run --case resource-contention-recovery
 python -m tools.cross_case_profile
 ```
 
+### Explicit Bounded Retry Policy
+
+В `0.39.0` terminal failed leaf может запросить retry через расширенный
+`LeafExecutionResult`:
+
+```text
+status = failed
+retryable = true
+retry_code = transient_io
+idempotency_key = externally-authorized-key
+```
+
+Сам запрос не даёт authority. Внешняя immutable `TaskRetryPolicy` определяет:
+
+- bounded `max_attempts_per_leaf` от 2 до 10;
+- allowlist retryable codes;
+- ожидаемый idempotency key по точному node id.
+
+Scheduler разрешает повтор только если одновременно:
+
+- result имеет failed + retryable contract;
+- code находится во внешнем allowlist;
+- node явно присутствует в policy;
+- предъявленный key точно совпадает;
+- attempt count меньше policy limit;
+- общий `TaskBudget.max_leaf_executions` не исчерпан.
+
+При успехе node возвращается в `ready`, а event log получает
+`leaf_retry_scheduled`. Отказ создаёт `leaf_retry_rejected` с deterministic
+reason и переводит node в обычный terminal failed. Причины включают:
+
+- `retry_policy_missing`;
+- `retry_code_not_allowed`;
+- `retry_node_not_authorized`;
+- `retry_idempotency_key_mismatch`;
+- `retry_attempt_budget_exhausted`.
+
+Task metadata не может задавать retry authority или idempotency key. Retry
+contract сохраняется через `JsonTaskGraphStore`. Writer использует task graph
+schema v2; loader принимает v1 и v2, поэтому старые snapshots без retry fields
+остаются читаемыми.
+
+Для удержания scheduler ниже 400 строк parent/dependency propagation вынесен во
+внутренний `TaskSchedulerPropagation` mixin. Status transitions по-прежнему
+остаются методами объекта `TaskScheduler`; новый orchestrator не введён.
+
+### Retryable Idempotent Side Effect Benchmark
+
+Benchmark `retryable-idempotent-side-effect` проверяет:
+
+```text
+inspect + prepare
+  -> dependent commit attempt 1
+  -> transient failure before side effect
+  -> policy validates code, node, key and budget
+  -> commit attempt 2 with the same key
+  -> one materialized side effect
+  -> integration verification
+```
+
+Acceptance требует:
+
+- все strategies завершаются;
+- ровно один transient failure на isolated run;
+- side effect материализуется ровно один раз;
+- обе попытки используют один authorized key;
+- parallel strategy перекрывает только independent inspect/prepare;
+- judge выбирает `parallel_retry`.
+
+После трёх independent runs case получил `confident`. Cross-case profile:
+
+```text
+parallel:   4 case wins, ordinal sum 4
+sequential: 0 case wins, ordinal sum 8
+monolithic: 0 case wins, ordinal sum 12
+```
+
+CLI:
+
+```bash
+python -m examples.retryable_side_effect_benchmark
+python -m tools.benchmark_confidence --run --case retryable-idempotent-side-effect
+python -m tools.cross_case_profile
+```
+
 ### Capability Acquisition
 
 ```text
@@ -1841,6 +1926,6 @@ Loop Engine
 
 ## Следующий этап
 
-1. Добавить retry policy для явно retryable failed leaves, отдельно от
-   interrupted-running recovery.
-2. Проверить idempotency keys и bounded retry budget на side-effecting leaves.
+1. Добавить retry delay/backoff как внешний cancellable clock policy.
+2. Проверить retry после cross-process lease contention без удержания lease
+   между попытками.

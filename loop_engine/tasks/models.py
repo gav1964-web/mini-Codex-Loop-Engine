@@ -63,6 +63,28 @@ class LeafExecutionResult:
     summary: str
     evidence: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
+    retryable: bool = False
+    retry_code: str | None = None
+    idempotency_key: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.retryable, bool):
+            raise TypeError("leaf retryable must be boolean")
+        if self.retryable:
+            if self.status != "failed":
+                raise ValueError("retryable leaf result must be failed")
+            code = (self.retry_code or "").strip()
+            key = (self.idempotency_key or "").strip()
+            if not code or not key:
+                raise ValueError(
+                    "retryable leaf result requires retry code and idempotency key"
+                )
+            self.retry_code = code
+            self.idempotency_key = key
+        elif self.retry_code is not None or self.idempotency_key is not None:
+            raise ValueError(
+                "non-retryable leaf result cannot carry retry fields"
+            )
 
 
 @dataclass(slots=True)

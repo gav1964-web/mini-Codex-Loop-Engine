@@ -8,7 +8,8 @@ from pathlib import Path
 
 from .models import TaskGraph, TaskStatus
 
-TASK_GRAPH_SCHEMA_VERSION = 1
+TASK_GRAPH_SCHEMA_VERSION = 2
+SUPPORTED_TASK_GRAPH_SCHEMA_VERSIONS = frozenset({1, 2})
 _GRAPH_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -37,7 +38,7 @@ class JsonTaskGraphStore:
     def load(self, graph_id: str) -> TaskGraph:
         payload = json.loads(self._target(graph_id).read_text(encoding="utf-8"))
         version = payload.get("schema_version")
-        if version != TASK_GRAPH_SCHEMA_VERSION:
+        if version not in SUPPORTED_TASK_GRAPH_SCHEMA_VERSIONS:
             raise ValueError(f"unsupported task graph schema version: {version}")
         graph = TaskGraph.from_dict(dict(payload["graph"]))
         for node in graph.nodes.values():

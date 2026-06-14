@@ -29,6 +29,11 @@ _ROLE_MAPPINGS = {
         "sequential_recovery": "sequential",
         "parallel_recovery": "parallel",
     },
+    "retryable-idempotent-side-effect": {
+        "monolithic": "monolithic",
+        "sequential_retry": "sequential",
+        "parallel_retry": "parallel",
+    },
 }
 
 
@@ -56,6 +61,14 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--retry-confidence",
+        type=Path,
+        default=Path(
+            "build/benchmarks/retryable-idempotent-side-effect/"
+            "confidence.json"
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("build/benchmarks/cross_case_profile.json"),
@@ -70,11 +83,12 @@ def main() -> int:
         load_benchmark_confidence(args.change_confidence),
         load_benchmark_confidence(args.audit_confidence),
         load_benchmark_confidence(args.recovery_confidence),
+        load_benchmark_confidence(args.retry_confidence),
     )
     profile = CrossCaseProfileAnalyzer(
         CrossCaseProfilePolicy(
             role_mappings=_ROLE_MAPPINGS,
-            minimum_cases=3,
+            minimum_cases=4,
             minimum_winner_share_basis_points=(
                 args.minimum_winner_share_bp
             ),

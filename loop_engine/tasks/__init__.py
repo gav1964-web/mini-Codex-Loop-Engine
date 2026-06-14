@@ -65,6 +65,7 @@ from .resource_leases import (
     ResourceLeaseManager,
     run_fenced_operation,
 )
+from .retry import RetryDecision, TaskRetryPolicy
 from .replay import (
     DecompositionStrategyRunner,
     DecompositionTrace,
@@ -136,6 +137,7 @@ __all__ = [
     "ResourceLease",
     "ResourceLeaseAttempt",
     "ResourceLeaseManager",
+    "RetryDecision",
     "run_fenced_operation",
     "SandboxMount",
     "ScriptedTaskDecomposer",
@@ -145,6 +147,7 @@ __all__ = [
     "TaskNode",
     "TaskScheduler",
     "TaskSchedulerPolicy",
+    "TaskRetryPolicy",
     "TaskStatus",
     "StrategyComparison",
     "StrategySamplingPolicy",

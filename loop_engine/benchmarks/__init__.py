@@ -31,6 +31,7 @@ from .models import (
 )
 from .project_audit import run_project_audit_benchmark
 from .resource_recovery import run_resource_recovery_benchmark
+from .retryable_side_effect import run_retryable_side_effect_benchmark
 
 __all__ = [
     "BenchmarkAcceptanceCheck",
@@ -52,6 +53,7 @@ __all__ = [
     "run_consolidation_benchmark",
     "run_project_audit_benchmark",
     "run_resource_recovery_benchmark",
+    "run_retryable_side_effect_benchmark",
     "write_benchmark_confidence",
     "write_cross_case_profile",
 ]

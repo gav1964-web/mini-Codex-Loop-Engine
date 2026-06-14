@@ -95,6 +95,9 @@ This project is a universal loop engine, not a coding-agent implementation.
 - Interrupted-running recovery and retryable terminal failure are separate
   contracts. Benchmarks and runtime code must not silently treat failed leaves
   as resumable without an explicit retry policy and budget.
+- Retry authority must come from immutable external policy: admitted node,
+  retry-code allowlist, bounded attempts, and exact idempotency key. Task
+  metadata and leaf executors may request retry but must not authorize it.
 - Token and cost metrics must come from an explicit typed usage provider, never
   inferred from task metadata or hidden provider pricing.
 - Cost objectives require measured values with one comparable cost basis across

@@ -16,6 +16,7 @@ from loop_engine.benchmarks import (
     run_consolidation_benchmark,
     run_project_audit_benchmark,
     run_resource_recovery_benchmark,
+    run_retryable_side_effect_benchmark,
     write_benchmark_confidence,
     write_cross_case_profile,
 )
@@ -36,6 +37,11 @@ _MAPPINGS = {
         "monolithic": "monolithic",
         "sequential_recovery": "sequential",
         "parallel_recovery": "parallel",
+    },
+    "retryable-idempotent-side-effect": {
+        "monolithic": "monolithic",
+        "sequential_retry": "sequential",
+        "parallel_retry": "parallel",
     },
 }
 
@@ -58,6 +64,11 @@ def confidence_reports(tmp_path_factory):
         sample_count=1,
         operation_delay_seconds=0.02,
     )
+    retry = run_retryable_side_effect_benchmark(
+        root / "retry.json",
+        sample_count=1,
+        operation_delay_seconds=0.02,
+    )
     policy = BenchmarkConfidencePolicy(minimum_runs=2)
 
     def confidence(name, report):
@@ -76,6 +87,7 @@ def confidence_reports(tmp_path_factory):
         confidence("change", change),
         confidence("audit", audit),
         confidence("recovery", recovery),
+        confidence("retry", retry),
     )
 
 
@@ -90,18 +102,23 @@ def test_cross_case_profile_finds_parallel_role_consensus(
     assert profile.consensus_roles == ("parallel",)
     assert profile.winner_share_basis_points == 10000
     assert profile.profiles[0].role == "parallel"
-    assert profile.profiles[0].case_wins == 3
+    assert profile.profiles[0].case_wins == 4
     assert {case.case for case in profile.cases} == set(_MAPPINGS)
 
 
 def test_cross_case_profile_requires_confident_sources(
     confidence_reports,
 ) -> None:
-    change, audit, recovery = confidence_reports
+    change, audit, recovery, retry = confidence_reports
     profile = CrossCaseProfileAnalyzer(
         CrossCaseProfilePolicy(role_mappings=_MAPPINGS)
     ).analyze(
-        (replace(change, status="low_confidence"), audit, recovery)
+        (
+            replace(change, status="low_confidence"),
+            audit,
+            recovery,
+            retry,
+        )
     )
 
     assert profile.status == "low_confidence"
@@ -159,6 +176,13 @@ def test_cross_case_json_loading_writing_and_cli(
             ),
             "--output",
             str(output),
+            "--retry-confidence",
+            str(
+                write_benchmark_confidence(
+                    tmp_path / "retry.json",
+                    confidence_reports[3],
+                )
+            ),
         ],
     )
 

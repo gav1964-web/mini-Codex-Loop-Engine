@@ -13,6 +13,7 @@ from loop_engine.benchmarks import (
     run_consolidation_benchmark,
     run_project_audit_benchmark,
     run_resource_recovery_benchmark,
+    run_retryable_side_effect_benchmark,
     write_benchmark_confidence,
 )
 
@@ -20,6 +21,9 @@ _RUNNERS = {
     "python-project-change": run_consolidation_benchmark,
     "python-project-audit": run_project_audit_benchmark,
     "resource-contention-recovery": run_resource_recovery_benchmark,
+    "retryable-idempotent-side-effect": (
+        run_retryable_side_effect_benchmark
+    ),
 }
 
 

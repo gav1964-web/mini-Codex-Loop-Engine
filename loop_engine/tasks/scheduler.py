@@ -30,9 +30,16 @@ from .resource_leases import (
     record_resource_lease,
     run_leased_operation,
 )
+from .retry import (
+    TaskRetryPolicy,
+    evaluate_retry,
+    retry_rejected_payload,
+    retry_scheduled_payload,
+)
+from .scheduler_propagation import TaskSchedulerPropagation
 
 
-class TaskScheduler:
+class TaskScheduler(TaskSchedulerPropagation):
     def __init__(
         self,
         *,
@@ -44,6 +51,7 @@ class TaskScheduler:
         store: TaskGraphStore | None = None,
         policy: TaskSchedulerPolicy | None = None,
         resource_lease_manager: ResourceLeaseManager | None = None,
+        retry_policy: TaskRetryPolicy | None = None,
     ) -> None:
         self.decomposer = decomposer
         self.capability_resolver = capability_resolver
@@ -53,6 +61,7 @@ class TaskScheduler:
         self.store = store
         self.policy = policy or TaskSchedulerPolicy()
         self.resource_lease_manager = resource_lease_manager
+        self.retry_policy = retry_policy
 
     def run(self, graph: TaskGraph) -> TaskGraph:
         validate_task_graph(graph)
@@ -319,66 +328,29 @@ class TaskScheduler:
             node.error = result.error or result.summary
             record_task_event(graph, "leaf_blocked", node.id, {"error": node.error})
         else:
-            node.status = TaskStatus.FAILED
             node.error = result.error or result.summary
-            record_task_event(graph, "leaf_failed", node.id, {"error": node.error})
+            decision = evaluate_retry(self.retry_policy, node, result)
+            if decision.retry:
+                node.status = TaskStatus.READY
+                node.error = None
+                record_task_event(
+                    graph, "leaf_retry_scheduled", node.id,
+                    retry_scheduled_payload(self.retry_policy, node, result),
+                )
+            else:
+                node.status = TaskStatus.FAILED
+                if result.retryable:
+                    record_task_event(
+                        graph, "leaf_retry_rejected", node.id,
+                        retry_rejected_payload(decision, result),
+                    )
+                record_task_event(
+                    graph,
+                    "leaf_failed",
+                    node.id,
+                    {"error": node.error},
+                )
         self._save(graph)
-
-    def _propagate(self, graph: TaskGraph) -> bool:
-        changed = False
-        for node in sorted(graph.nodes.values(), key=lambda item: item.depth, reverse=True):
-            if node.status in {TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.BLOCKED}:
-                continue
-            dependency_states = [graph.nodes[item].status for item in node.dependencies]
-            if any(status in {TaskStatus.FAILED, TaskStatus.BLOCKED} for status in dependency_states):
-                node.status = TaskStatus.BLOCKED
-                node.error = "dependency_failed_or_blocked"
-                record_task_event(graph, "task_blocked", node.id, {"reason": node.error})
-                self._save(graph)
-                changed = True
-                continue
-            if node.children:
-                child_states = [graph.nodes[item].status for item in node.children]
-                if any(status in {TaskStatus.FAILED, TaskStatus.BLOCKED} for status in child_states):
-                    node.status = TaskStatus.BLOCKED
-                    node.error = "child_failed_or_blocked"
-                    record_task_event(graph, "task_blocked", node.id, {"reason": node.error})
-                    self._save(graph)
-                    changed = True
-                elif all(status == TaskStatus.COMPLETED for status in child_states):
-                    try:
-                        result = self.integration_verifier.verify(node, graph)
-                    except Exception as exc:
-                        result = LeafExecutionResult(
-                            status="failed",
-                            summary="integration verifier raised an exception",
-                            error=f"{type(exc).__name__}: {exc}",
-                        )
-                    node.result = result
-                    if result.status == "completed":
-                        node.status = TaskStatus.COMPLETED
-                        record_task_event(
-                            graph,
-                            "integration_completed",
-                            node.id,
-                            {"summary": result.summary},
-                        )
-                    else:
-                        node.status = (
-                            TaskStatus.BLOCKED
-                            if result.status == "blocked"
-                            else TaskStatus.FAILED
-                        )
-                        node.error = result.error or result.summary
-                        record_task_event(
-                            graph,
-                            "integration_failed",
-                            node.id,
-                            {"error": node.error},
-                        )
-                    self._save(graph)
-                    changed = True
-        return changed
 
     @staticmethod
     def _candidate_nodes(graph: TaskGraph) -> list[TaskNode]:

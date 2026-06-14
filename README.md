@@ -168,6 +168,7 @@ state = engine.run(definition)
 - immutable benchmark history with confidence-aware consensus ranking;
 - cross-case strategy-role profiles over independent confidence reports;
 - interruption recovery benchmark with conflicting write-resource claims;
+- external bounded retry policy with authorized idempotency keys;
 - persistent generated-capability registry with artifact integrity checks;
 - policy-driven bounded runtime for admitted generated plugins;
 - fail-closed WSL bubblewrap sandbox backend for untrusted plugins;
@@ -186,27 +187,28 @@ mini-Codex Plugin Generator, coding verifiers, and multi-agent workers.
 
 ## Status
 
-Version `0.38.0` adds `resource-contention-recovery`, a stress benchmark for
-at-least-once task recovery. It simulates process interruption after a leaf has
-been persisted as running, reloads the graph through `JsonTaskGraphStore`, and
-continues with a new scheduler instance.
+Version `0.39.0` adds explicit bounded retry for terminal failed leaves.
+`TaskRetryPolicy` is external authority for retryable error codes, maximum
+attempts, and the expected idempotency key for each admitted node. A leaf result
+may request retry, but cannot authorize itself.
 
-The staged strategies preserve completed leaves, retry only the interrupted
-leaf, allow independent inspection to overlap with the first write, and keep
-two writes to the same resource serialized. The benchmark verifies the final
-`AB` state and requires exactly one recovery marker per run.
+Retry requests fail closed when policy is absent, the code is not allowed, the
+node is not admitted, the key differs, or the attempt budget is exhausted.
+Every scheduled or rejected retry is retained as a task event. Retry fields
+also survive task-graph JSON persistence.
 
-Run it directly or through confidence history:
+The new benchmark proves one transient failure followed by one successful
+side effect using the same key, with exactly one materialized commit:
 
 ```bash
-python -m examples.resource_recovery_benchmark
-python -m tools.benchmark_confidence --run --case resource-contention-recovery
+python -m examples.retryable_side_effect_benchmark
+python -m tools.benchmark_confidence --run --case retryable-idempotent-side-effect
 python -m tools.cross_case_profile
 ```
 
-The current three-case profile selects the `parallel` role in all three cases.
-This means admitted independent work helped while conflicting writes remained
-serialized; it is not a rule to execute conflicting mutations concurrently.
+The current four-case profile selects the `parallel` role in all four cases.
+The retried commit remains a dependent, serialized leaf; only independent
+inspection and preparation overlap.
 
 The complete production gate remains `python -m tools.release_gate`.
 
